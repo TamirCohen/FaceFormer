@@ -72,6 +72,9 @@ class FaceFormerTraceable(nn.Module):
         self.vertice_map = nn.Linear(args.vertice_dim, args.feature_dim)
         # motion decoder
         self.vertice_map_r = nn.Linear(args.feature_dim, args.vertice_dim)
+        nn.init.constant_(self.vertice_map_r.weight, 0)
+        nn.init.constant_(self.vertice_map_r.bias, 0)
+
 
     def forward(self, obj_embedding, template, vertice, hidden_states, criterion):
         vertice_emb = obj_embedding.unsqueeze(1) # (1,1,feature_dim)
@@ -106,8 +109,6 @@ class Faceformer(nn.Module):
         # style embedding
         self.obj_vector = nn.Linear(len(args.train_subjects.split()), args.feature_dim, bias=False)
         self.device = args.device
-        nn.init.constant_(self.vertice_map_r.weight, 0)
-        nn.init.constant_(self.vertice_map_r.bias, 0)
         self.face_former_traceable = FaceFormerTraceable(args)
 
     def forward(self, audio, template, vertice, one_hot, criterion,teacher_forcing=True):
