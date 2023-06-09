@@ -61,6 +61,7 @@ class PeriodicPositionalEncoding(nn.Module):
 
 class FaceFormerTraceable(nn.Module):
     def __init__(self, args) -> None:
+        super(FaceFormerTraceable, self).__init__()
         decoder_layer = nn.TransformerDecoderLayer(d_model=args.feature_dim, nhead=4, dim_feedforward=2*args.feature_dim, batch_first=True)        
         self.transformer_decoder = nn.TransformerDecoder(decoder_layer, num_layers=1)
         self.device = args.device
