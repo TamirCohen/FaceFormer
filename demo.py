@@ -78,6 +78,7 @@ def transform_model_to_int8(model, input_fp32):
     # a tuple of one or more example inputs are needed to trace the model
     example_inputs = (input_fp32)
     # prepare
+    print(quantize_fx.prepare_fx(model_to_quantize.face_former_traceable))
     model_prepared = quantize_fx.prepare_fx(model_to_quantize, qconfig_mapping, example_inputs)
     # no calibration needed when we only have dynamic/weight_only quantization
     # quantize
