@@ -5,6 +5,8 @@ import numpy as np
 import copy
 import math
 from wav2vec import Wav2Vec2Model
+from transformers.models.big_bird.modeling_big_bird import BigBirdEncoder
+from transformers import BigBirdConfig
 
 # Temporal Bias, inspired by ALiBi: https://github.com/ofirpress/attention_with_linear_biases
 def init_biased_mask(n_head, max_seq_len, period):
@@ -78,8 +80,24 @@ class Faceformer(nn.Module):
         self.PPE = PeriodicPositionalEncoding(args.feature_dim, period = args.period)
         # temporal bias
         self.biased_mask = init_biased_mask(n_head = 4, max_seq_len = 600, period=args.period)
-        decoder_layer = nn.TransformerDecoderLayer(d_model=args.feature_dim, nhead=4, dim_feedforward=2*args.feature_dim, batch_first=True)        
-        self.transformer_decoder = nn.TransformerDecoder(decoder_layer, num_layers=1)
+        
+        if args.use_bigbird_attention:
+            configuration = BigBirdConfig(
+                attention_type="block_sparse", # Use the bigbird attention
+                num_hidden_layers=1, # As in the original paper decoder
+                is_decoder=True, # Use the model as decoder
+                num_attention_heads=4,
+                hidden_size=args.feature_dim,
+                add_cross_attention=True, # Cross attention between the encoder and the decoder
+                hidden_dropout_prob=0.1, 
+                intermediate_size=2*args.feature_dim, # The dimension of the feedforward layer
+                hidden_act="relu", # This is the activation in the intermidate layer - same as the activation in the TranDecoder
+                # layer_norm_eps=1e-5 - This is the default value on the decoder - but maybe it should stay this way
+            )
+            self.transformer_decoder = BigBirdEncoder(configuration)
+        else: 
+            decoder_layer = nn.TransformerDecoderLayer(d_model=args.feature_dim, nhead=4, dim_feedforward=2*args.feature_dim, batch_first=True)        
+            self.transformer_decoder = nn.TransformerDecoder(decoder_layer, num_layers=1)
         # motion decoder
         self.vertice_map_r = nn.Linear(args.feature_dim, args.vertice_dim)
         # style embedding

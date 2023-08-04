@@ -196,6 +196,8 @@ def main():
     parser.add_argument("--background_black", type=bool, default=True, help='whether to use black background')
     parser.add_argument("--template_path", type=str, default="templates.pkl", help='path of the personalized templates')
     parser.add_argument("--render_template_path", type=str, default="templates", help='path of the mesh in BIWI/FLAME topology')
+    parser.add_argument("--use_bigbird_attention", type=bool, default=False, help='Should use a more efficent attention implementation')
+
     args = parser.parse_args()   
 
     test_model(args)
