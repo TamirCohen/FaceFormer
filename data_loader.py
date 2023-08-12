@@ -52,7 +52,7 @@ def read_data(args):
         templates = pickle.load(fin,encoding='latin1')
     
     for r, ds, fs in os.walk(audio_path):
-        for f in tqdm(fs):
+        for f in tqdm(fs[::2]):
             if f.endswith("wav"):
                 wav_path = os.path.join(r,f)
                 speech_array, sampling_rate = librosa.load(wav_path, sr=16000)
@@ -68,7 +68,7 @@ def read_data(args):
                     del data[key]
                 else:
                     if args.dataset == "vocaset":
-                        data[key]["vertice"] = np.load(vertice_path,allow_pickle=True)[::2,:]#due to the memory limit
+                        data[key]["vertice"] = np.load(vertice_path,allow_pickle=True)[::2,:]#due to the memory limit of GPU
                     elif args.dataset == "BIWI":
                         data[key]["vertice"] = np.load(vertice_path,allow_pickle=True)
 
