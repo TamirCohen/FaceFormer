@@ -5,6 +5,7 @@ import numpy as np
 import copy
 import math
 from wav2vec import Wav2Vec2Model
+from .modeling_big_bird import BigBirdLayer, BigBirdConfig
 
 # Temporal Bias, inspired by ALiBi: https://github.com/ofirpress/attention_with_linear_biases
 def init_biased_mask(n_head, max_seq_len, period):
