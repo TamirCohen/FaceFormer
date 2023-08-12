@@ -5,7 +5,7 @@ import numpy as np
 import copy
 import math
 from wav2vec import Wav2Vec2Model
-from modeling_big_bird import BigBirdLayer
+from modeling_big_bird import BigBirdEncoder
 from transformers import BigBirdConfig
 
 
