@@ -68,7 +68,8 @@ def read_data(args):
                     del data[key]
                 else:
                     if args.dataset == "vocaset":
-                        data[key]["vertice"] = np.load(vertice_path,allow_pickle=True)[::2,:]#due to the memory limit
+                        #data[key]["vertice"] = np.load(vertice_path,allow_pickle=True)[::2,:]#due to the memory limit
+                        data[key]["vertice"] = np.load(vertice_path,allow_pickle=True)[::4,:]#due to the memory limit
                     elif args.dataset == "BIWI":
                         data[key]["vertice"] = np.load(vertice_path,allow_pickle=True)
 
