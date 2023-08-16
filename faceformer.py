@@ -95,7 +95,7 @@ class Faceformer(nn.Module):
                 hidden_act="relu", # This is the activation in the intermidate layer - same as the activation in the TranDecoder
                 # layer_norm_eps=1e-5 - This is the default value on the decoder - but maybe it should stay this way
             )
-            self.transformer_decoder = BigBirdEncoder(configuration)
+            self.transformer_decoder_big_bird = BigBirdEncoder(configuration)
         else: 
             decoder_layer = nn.TransformerDecoderLayer(d_model=args.feature_dim, nhead=4, dim_feedforward=2*args.feature_dim, batch_first=True)        
             self.transformer_decoder = nn.TransformerDecoder(decoder_layer, num_layers=1)
@@ -106,6 +106,14 @@ class Faceformer(nn.Module):
         self.device = args.device
         nn.init.constant_(self.vertice_map_r.weight, 0)
         nn.init.constant_(self.vertice_map_r.bias, 0)
+
+    def decoder_forward(self, vertice_input, hidden_states, tgt_mask, memory_mask):
+        if self.args.use_bigbird_attention:
+            # TODO not sure what is the parameter order
+            vertice_out = self.transformer_decoder_big_bird(hidden_states=vertice_input, encoder_hidden_states=hidden_states, attention_mask=tgt_mask, encoder_attention_mask=memory_mask)
+        else:
+            vertice_out = self.transformer_decoder(tgt=vertice_input, memory=hidden_states, tgt_mask=tgt_mask, memory_mask=memory_mask)
+        return vertice_out
 
     def forward(self, audio, template, vertice, one_hot, criterion,teacher_forcing=True):
         # tgt_mask: :math:`(T, T)`.
@@ -130,7 +138,7 @@ class Faceformer(nn.Module):
             vertice_input = self.PPE(vertice_input)
             tgt_mask = self.biased_mask[:, :vertice_input.shape[1], :vertice_input.shape[1]].clone().detach().to(device=self.device)
             memory_mask = enc_dec_mask(self.device, self.dataset, vertice_input.shape[1], hidden_states.shape[1])
-            vertice_out = self.transformer_decoder(vertice_input, hidden_states, tgt_mask=tgt_mask, memory_mask=memory_mask)
+            vertice_out = self.decoder_forward(vertice_input=vertice_input, hidden_states=hidden_states, tgt_mask=tgt_mask, memory_mask=memory_mask)
             vertice_out = self.vertice_map_r(vertice_out)
         else:
             for i in range(frame_num):
@@ -142,7 +150,7 @@ class Faceformer(nn.Module):
                     vertice_input = self.PPE(vertice_emb)
                 tgt_mask = self.biased_mask[:, :vertice_input.shape[1], :vertice_input.shape[1]].clone().detach().to(device=self.device)
                 memory_mask = enc_dec_mask(self.device, self.dataset, vertice_input.shape[1], hidden_states.shape[1])
-                vertice_out = self.transformer_decoder(vertice_input, hidden_states, tgt_mask=tgt_mask, memory_mask=memory_mask)
+                vertice_out = self.decoder_forward(vertice_input=vertice_input, hidden_states=hidden_states, tgt_mask=tgt_mask, memory_mask=memory_mask)
                 vertice_out = self.vertice_map_r(vertice_out)
                 new_output = self.vertice_map(vertice_out[:,-1,:]).unsqueeze(1)
                 new_output = new_output + style_emb
@@ -173,7 +181,7 @@ class Faceformer(nn.Module):
 
             tgt_mask = self.biased_mask[:, :vertice_input.shape[1], :vertice_input.shape[1]].clone().detach().to(device=self.device)
             memory_mask = enc_dec_mask(self.device, self.dataset, vertice_input.shape[1], hidden_states.shape[1])
-            vertice_out = self.transformer_decoder(vertice_input, hidden_states, tgt_mask=tgt_mask, memory_mask=memory_mask)
+            vertice_out = self.decoder_forward(vertice_input=vertice_input, hidden_states=hidden_states, tgt_mask=tgt_mask, memory_mask=memory_mask)
             vertice_out = self.vertice_map_r(vertice_out)
             new_output = self.vertice_map(vertice_out[:,-1,:]).unsqueeze(1)
             new_output = new_output + style_emb
