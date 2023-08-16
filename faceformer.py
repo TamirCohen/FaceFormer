@@ -81,7 +81,7 @@ class Faceformer(nn.Module):
         self.PPE = PeriodicPositionalEncoding(args.feature_dim, period = args.period)
         # temporal bias
         self.biased_mask = init_biased_mask(n_head = 4, max_seq_len = 600, period=args.period)
-        
+        self.args = args
         if args.use_bigbird_attention:
             configuration = BigBirdConfig(
                 attention_type="block_sparse", # Use the bigbird attention

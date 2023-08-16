@@ -1401,10 +1401,19 @@ class BigBirdAttention(nn.Module):
             )
         else:
             if encoder_hidden_states is not None:
-                raise ValueError("BigBird cannot be used as a decoder when config.attention_type != 'original_full'")
-            self_outputs = self.self(
-                hidden_states, band_mask, from_mask, to_mask, from_blocked_mask, to_blocked_mask, output_attentions
-            )
+                print("EXPERIMENTAL: using bigbird with block_sparse attention as a decoder!!")
+                print("EXPERIMENTAL: We should use the encoder hidden states as keys and values")
+                # raise ValueError("BigBird cannot be used as a decoder when config.attention_type != 'original_full'")
+                self_outputs = self.self(
+                    hidden_states=hidden_states, band_mask=band_mask, from_mask=from_mask,
+                    to_mask=to_mask, from_blocked_mask=from_blocked_mask, to_blocked_mask=to_blocked_mask,
+                    output_attentions=output_attentions)
+
+            else:
+                self_outputs = self.self(
+                    hidden_states=hidden_states, band_mask=band_mask, from_mask=from_mask,
+                    to_mask=to_mask, from_blocked_mask=from_blocked_mask, to_blocked_mask=to_blocked_mask,
+                    output_attentions=output_attentions)
 
         attention_output = self.output(self_outputs[0], hidden_states)
         outputs = (attention_output,) + self_outputs[1:]  # add attentions if we output them
