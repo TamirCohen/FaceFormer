@@ -437,6 +437,7 @@ class BigBirdBlockSparseAttention(nn.Module):
         self.query = nn.Linear(config.hidden_size, self.all_head_size, bias=config.use_bias)
         self.key = nn.Linear(config.hidden_size, self.all_head_size, bias=config.use_bias)
         self.value = nn.Linear(config.hidden_size, self.all_head_size, bias=config.use_bias)
+        self.config = config
 
     def transpose_for_scores(self, x):
         new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
@@ -446,6 +447,7 @@ class BigBirdBlockSparseAttention(nn.Module):
     def forward(
         self,
         hidden_states,
+        encoder_hidden_states=None,
         band_mask=None,
         from_mask=None,
         to_mask=None,
@@ -453,11 +455,15 @@ class BigBirdBlockSparseAttention(nn.Module):
         to_blocked_mask=None,
         output_attentions=None,
     ):
-        # Currently this `class` can't be used in decoder.
 
         batch_size, seqlen, _ = hidden_states.size()
         to_seq_length = from_seq_length = seqlen
         from_block_size = to_block_size = self.block_size
+
+        # If this is instantiated as a cross-attention module, the keys
+        # and values come from an encoder; the attention mask needs to be
+        # such that the encoder's padding tokens are not attended to.
+        is_cross_attention = encoder_hidden_states is not None
 
         if from_seq_length % from_block_size != 0:
             raise ValueError("Query sided sequence length must be multiple of block size")
@@ -465,8 +471,13 @@ class BigBirdBlockSparseAttention(nn.Module):
         if to_seq_length % to_block_size != 0:
             raise ValueError("Key/Value sided sequence length must be multiple of block size")
 
-        query_layer = self.transpose_for_scores(self.query(hidden_states))
-        key_layer = self.transpose_for_scores(self.key(hidden_states))
+        if is_cross_attention:
+            key_layer = self.transpose_for_scores(self.key(encoder_hidden_states))
+            value_layer = self.transpose_for_scores(self.value(encoder_hidden_states))
+        else:
+            query_layer = self.transpose_for_scores(self.query(hidden_states))
+            key_layer = self.transpose_for_scores(self.key(hidden_states))
+
         value_layer = self.transpose_for_scores(self.value(hidden_states))
 
         context_layer, attention_probs = self.bigbird_block_sparse_attention(

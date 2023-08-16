@@ -93,6 +93,7 @@ class Faceformer(nn.Module):
                 hidden_dropout_prob=0.1, 
                 intermediate_size=2*args.feature_dim, # The dimension of the feedforward layer
                 hidden_act="relu", # This is the activation in the intermidate layer - same as the activation in the TranDecoder
+                block_size=64, # default value
                 # layer_norm_eps=1e-5 - This is the default value on the decoder - but maybe it should stay this way
             )
             self.transformer_decoder_big_bird = BigBirdEncoder(configuration)
@@ -181,6 +182,7 @@ class Faceformer(nn.Module):
 
             tgt_mask = self.biased_mask[:, :vertice_input.shape[1], :vertice_input.shape[1]].clone().detach().to(device=self.device)
             memory_mask = enc_dec_mask(self.device, self.dataset, vertice_input.shape[1], hidden_states.shape[1])
+            print(f"vertice input shape  {vertice_input.shape}")
             vertice_out = self.decoder_forward(vertice_input=vertice_input, hidden_states=hidden_states, tgt_mask=tgt_mask, memory_mask=memory_mask)
             vertice_out = self.vertice_map_r(vertice_out)
             new_output = self.vertice_map(vertice_out[:,-1,:]).unsqueeze(1)
