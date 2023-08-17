@@ -52,7 +52,7 @@ def read_data(args):
         templates = pickle.load(fin,encoding='latin1')
     
     for r, ds, fs in os.walk(audio_path):
-        for f in tqdm(fs[::2]):
+        for f in tqdm(fs):
             if f.endswith("wav"):
                 wav_path = os.path.join(r,f)
                 speech_array, sampling_rate = librosa.load(wav_path, sr=16000)
