@@ -38,7 +38,7 @@ def test_model(args):
         np.random.seed(42)
         print("Setting seed to 42...")
     #build model
-    model = Faceformer(args)
+    model = get_model(args)
     model.load_state_dict(torch.load(os.path.join(args.dataset, '{}.pth'.format(args.model_name)),  map_location=torch.device(args.device)))
     model = model.to(torch.device(args.device))
     model.eval()
@@ -68,22 +68,16 @@ def test_model(args):
     audio_feature = np.squeeze(processor(speech_array,sampling_rate=16000).input_values)
     audio_feature = np.reshape(audio_feature,(-1,audio_feature.shape[0]))
     audio_feature = torch.FloatTensor(audio_feature).to(device=args.device)
-    print("Model size before quantization: ")
-    print_size_of_model(model)
 
-    if args.int8_quantization == "dynamic_fx":
-        raise NotImplementedError("dynamic_fx quantization is not supported because model is not traceable.")
-        print("Doing int8 quantization...")
-        model = transform_model_to_int8_fx(model, audio_feature)
-    elif args.int8_quantization == "dynamic_eager":
-        print("Doing dynamic_eager int8 quantization...")
-        model = transform_model_to_int8_eager(model)
     print(model)
-    print("Model size after quantization: ")
-    print_size_of_model(model)
+
     print("Starting to predict...")
     start_time = time.time()
     #TODO consider using intel ipex...
+    if args.int8_quantization == "static_int8":
+        model.predict(audio_feature, template, one_hot, args.optimize_last_layer)
+        model = torch.ao.quantization.convert(model)
+
     with profile(activities=[ProfilerActivity.CPU],
         profile_memory=True,
         record_shapes=True,
@@ -98,12 +92,31 @@ def test_model(args):
     prediction = prediction.squeeze() # (seq_len, V*3)
     np.save(os.path.join(args.result_path, test_name), prediction.detach().cpu().numpy())
 
-def transform_model_to_int8_eager(model):
+
+def get_model(args):
+    if args.int8_quantization == "dynamic_int8":
+        return create_int8_dynamic_model(args)
+    elif args.int8_quantization == "static_int8":
+        return create_static_quantized_model(args)
+    else:
+        return Faceformer(args)
+
+def create_int8_dynamic_model(args):
+    model = Faceformer(args)
     model_int8 = torch.ao.quantization.quantize_dynamic(
         model,  # the original model
         {torch.nn.Linear},  # a set of layers to dynamically quantize
         dtype=torch.qint8)  # the target dtype for quantized weights
     return model_int8
+
+def create_static_quantized_model(args):
+    model = Faceformer(args, quantize_statically=True)
+    model.eval()
+    model.qconfig = torch.ao.quantization.get_default_qconfig('x86')
+    # Not sure what modules needs to be fused, I just wrote here conv and relu
+    model_fused = torch.ao.quantization.fuse_modules(model, [['conv', 'relu']])
+    model_fp32_prepared = torch.ao.quantization.prepare(model_fused)
+    return model_fp32_prepared
         
 def print_size_of_model(model):
     torch.save(model.state_dict(), "temp.p")

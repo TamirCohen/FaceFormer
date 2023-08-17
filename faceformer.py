@@ -61,7 +61,7 @@ class PeriodicPositionalEncoding(nn.Module):
         return self.dropout(x)
 
 class Faceformer(nn.Module):
-    def __init__(self, args):
+    def __init__(self, args, quantize_statically=False):
         super(Faceformer, self).__init__()
         """
         audio: (batch_size, raw_wav)
@@ -88,6 +88,10 @@ class Faceformer(nn.Module):
         self.device = args.device
         nn.init.constant_(self.vertice_map_r.weight, 0)
         nn.init.constant_(self.vertice_map_r.bias, 0)
+        self.quantize_statically = quantize_statically
+        if self.quantize_statically:
+            self.quant = torch.ao.quantization.QuantStub()
+            self.dequant = torch.ao.quantization.DeQuantStub()
 
     def forward(self, audio, template, vertice, one_hot, criterion,teacher_forcing=True):
         # tgt_mask: :math:`(T, T)`.
@@ -95,6 +99,10 @@ class Faceformer(nn.Module):
         template = template.unsqueeze(1) # (1,1, V*3)
         obj_embedding = self.obj_vector(one_hot)#(1, feature_dim)
         frame_num = vertice.shape[1]
+        
+        # quantize the audio!
+        if self.quantize_statically:
+            audio = self.quant(audio)
         hidden_states = self.audio_encoder(audio, self.dataset, frame_num=frame_num).last_hidden_state
         if self.dataset == "BIWI":
             if hidden_states.shape[1]<frame_num*2:
@@ -122,11 +130,20 @@ class Faceformer(nn.Module):
                     vertice_input = self.PPE(style_emb)
                 else:
                     vertice_input = self.PPE(vertice_emb)
+                
+                # Quantisize the vertice input
+                if self.quantize_statically:
+                    vertice_input = self.quant(vertice_input)
+
                 tgt_mask = self.biased_mask[:, :vertice_input.shape[1], :vertice_input.shape[1]].clone().detach().to(device=self.device)
                 memory_mask = enc_dec_mask(self.device, self.dataset, vertice_input.shape[1], hidden_states.shape[1])
                 vertice_out = self.transformer_decoder(vertice_input, hidden_states, tgt_mask=tgt_mask, memory_mask=memory_mask)
                 vertice_out = self.vertice_map_r(vertice_out)
                 new_output = self.vertice_map(vertice_out[:,-1,:]).unsqueeze(1)
+
+                # Dequantisize the vertice output
+                if self.quantize_statically:
+                    new_output = self.dequant(new_output)
                 new_output = new_output + style_emb
                 vertice_emb = torch.cat((vertice_emb, new_output), 1)
 
@@ -138,6 +155,10 @@ class Faceformer(nn.Module):
     def predict(self, audio, template, one_hot, optimize_last_layer=False):
         template = template.unsqueeze(1) # (1,1, V*3)
         obj_embedding = self.obj_vector(one_hot)
+        
+        if self.quantize_statically:
+            audio = self.quant(audio)
+    
         hidden_states = self.audio_encoder(audio, self.dataset).last_hidden_state
         all_vertices_out_list = []
         if self.dataset == "BIWI":
@@ -154,6 +175,9 @@ class Faceformer(nn.Module):
                 # Encode the motions vertices with the periodic positional encoder
                 vertice_input = self.PPE(vertice_emb)
 
+            # Quantisize the vertice input
+            if self.quantize_statically:
+                vertice_input = self.quant(vertice_input)
             # Mask from the paper
             tgt_mask = self.biased_mask[:, :vertice_input.shape[1], :vertice_input.shape[1]].clone().detach().to(device=self.device)
             # Generating the mask of the input vertices for the decoder
@@ -173,6 +197,11 @@ class Faceformer(nn.Module):
                 new_output = self.vertice_map(vertice_out[:,-1,:]).unsqueeze(1)
             else:
                 new_output = self.vertice_map(vertice_out).unsqueeze(1)
+            
+            # Dequantisize the vertice output
+            if self.quantize_statically:
+                new_output = self.dequant(new_output)
+                
             new_output = new_output + style_emb
 
             # If this line is commented the self.vertice_map_r wont be executed longer.
