@@ -67,7 +67,6 @@ def test_model(args):
     audio_feature = np.reshape(audio_feature,(-1,audio_feature.shape[0]))
     audio_feature = torch.FloatTensor(audio_feature).to(device=args.device)
 
-    print(model)
 
     print("Starting to predict...")
     start_time = time.time()
@@ -86,6 +85,7 @@ def test_model(args):
             {torch.nn.Linear},  # a set of layers to dynamically quantize
             dtype=torch.qint8)  # the target dtype for quantized weights
 
+    print(model)
 
     with profile(activities=[ProfilerActivity.CPU],
         profile_memory=True,
