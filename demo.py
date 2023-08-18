@@ -10,8 +10,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.ao.quantization import (
-  get_default_qconfig_mapping,
-  get_default_qat_qconfig_mapping,
   QConfigMapping,
 )
 import torch.quantization.quantize_fx as quantize_fx
@@ -75,8 +73,19 @@ def test_model(args):
     start_time = time.time()
     #TODO consider using intel ipex...
     if args.int8_quantization == "static_int8":
+        model.qconfig = torch.ao.quantization.get_default_qconfig('x86')
+        # Not sure what modules needs to be fused, I just wrote here conv and relu
+        #TODO!! use fuzed models
+        # model_fused = torch.ao.quantization.fuse_modules(model, [['conv', 'relu']])
+        model = torch.ao.quantization.prepare(model)
         model.predict(audio_feature, template, one_hot, args.optimize_last_layer)
         model = torch.ao.quantization.convert(model)
+    elif args.int8_quantization == "dynamic_int8":
+        model = torch.ao.quantization.quantize_dynamic(
+            model,  # the original model
+            {torch.nn.Linear},  # a set of layers to dynamically quantize
+            dtype=torch.qint8)  # the target dtype for quantized weights
+
 
     with profile(activities=[ProfilerActivity.CPU],
         profile_memory=True,
@@ -95,28 +104,11 @@ def test_model(args):
 
 def get_model(args):
     if args.int8_quantization == "dynamic_int8":
-        return create_int8_dynamic_model(args)
+        return Faceformer(args)
     elif args.int8_quantization == "static_int8":
-        return create_static_quantized_model(args)
+        return Faceformer(args, quantize_statically=True)
     else:
         return Faceformer(args)
-
-def create_int8_dynamic_model(args):
-    model = Faceformer(args)
-    model_int8 = torch.ao.quantization.quantize_dynamic(
-        model,  # the original model
-        {torch.nn.Linear},  # a set of layers to dynamically quantize
-        dtype=torch.qint8)  # the target dtype for quantized weights
-    return model_int8
-
-def create_static_quantized_model(args):
-    model = Faceformer(args, quantize_statically=True)
-    model.eval()
-    model.qconfig = torch.ao.quantization.get_default_qconfig('x86')
-    # Not sure what modules needs to be fused, I just wrote here conv and relu
-    model_fused = torch.ao.quantization.fuse_modules(model, [['conv', 'relu']])
-    model_fp32_prepared = torch.ao.quantization.prepare(model_fused)
-    return model_fp32_prepared
         
 def print_size_of_model(model):
     torch.save(model.state_dict(), "temp.p")
