@@ -72,6 +72,8 @@ def test_model(args):
     start_time = time.time()
     #TODO consider using intel ipex...
     if args.int8_quantization == "static_int8":
+        normed_conv_model = model.audio_encoder.encoder.pos_conv_embed.conv
+        weight_g, weight_v = normed_conv_model.weight_g, normed_conv_model.weight_v
         model.qconfig = torch.ao.quantization.get_default_qconfig('x86')
         # Not sure what modules needs to be fused, I just wrote here conv and relu
         #TODO!! use fuzed models
@@ -83,18 +85,17 @@ def test_model(args):
         # Currently pytorch cant convert weight_norm(conv) to quantisized model - so Iam doing it my own and will open an issue for that
         # Maybe it is not the right solution
         # TODO somone asked this in https://discuss.pytorch.org/t/what-is-the-correct-way-to-qat-a-conv-layer-with-weight-norm/160562
-        weight_norm = nn.utils.weight_norm
-        if hasattr(nn.utils.parametrizations, "weight_norm"):
-            weight_norm = nn.utils.parametrizations.weight_norm
+        normed_conv_model = model.audio_encoder.encoder.pos_conv_embed.conv
+        normed_conv_model.register_parameter("weight" + '_g', weight_g)
+        normed_conv_model.register_parameter("weight" + '_v', weight_v)
 
-        model.audio_encoder.encode.pos_conv_embed.conv = weight_norm(model.audio_encoder.encode.pos_conv_embed.conv , name="weight", dim=2)
+
     elif args.int8_quantization == "dynamic_int8":
         model = torch.ao.quantization.quantize_dynamic(
             model,  # the original model
             {torch.nn.Linear},  # a set of layers to dynamically quantize
             dtype=torch.qint8)  # the target dtype for quantized weights
 
-    print(model)
 
     with profile(activities=[ProfilerActivity.CPU],
         profile_memory=True,
