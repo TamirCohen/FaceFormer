@@ -550,8 +550,6 @@ class Wav2Vec2Attention(nn.Module):
         bsz, tgt_len, _ = hidden_states.size()
 
         # get query proj
-        print(type(self.scaling))
-        print(type(hidden_states))
         query_states = self.float_func.mul_scalar(self.q_proj(hidden_states), self.scaling)
         # query_states = self.q_proj(hidden_states) * self.scaling
         # get key, value proj
