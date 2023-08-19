@@ -103,7 +103,7 @@ class Faceformer(nn.Module):
         # quantize the audio!
         if self.quantize_statically:
             audio = self.quant(audio)
-        hidden_states = self.audio_encoder(audio, self.dataset, frame_num=frame_num).last_hidden_state
+        hidden_states = self.audio_encoder(audio, self.dataset, frame_num=frame_num, quantize_statically=self.quantize_statically).last_hidden_state
         if self.dataset == "BIWI":
             if hidden_states.shape[1]<frame_num*2:
                 vertice = vertice[:, :hidden_states.shape[1]//2]
@@ -154,12 +154,16 @@ class Faceformer(nn.Module):
 
     def predict(self, audio, template, one_hot, optimize_last_layer=False):
         template = template.unsqueeze(1) # (1,1, V*3)
+
+        if self.quantize_statically:
+            one_hot = self.quant(one_hot)
+
         obj_embedding = self.obj_vector(one_hot)
         
         if self.quantize_statically:
             audio = self.quant(audio)
     
-        hidden_states = self.audio_encoder(audio, self.dataset).last_hidden_state
+        hidden_states = self.audio_encoder(audio, self.dataset, quantize_statically=self.quantize_statically).last_hidden_state
         all_vertices_out_list = []
         if self.dataset == "BIWI":
             frame_num = hidden_states.shape[1]//2
