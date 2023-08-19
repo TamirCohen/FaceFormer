@@ -75,10 +75,19 @@ def test_model(args):
         model.qconfig = torch.ao.quantization.get_default_qconfig('x86')
         # Not sure what modules needs to be fused, I just wrote here conv and relu
         #TODO!! use fuzed models
-        # model_fused = torch.ao.quantization.fuse_modules(model, [['conv', 'relu']])
+        # model_fused = torch.ao.quantization.fuse_modules(model, [['conv', 'activation']])
         model = torch.ao.quantization.prepare(model)
         model.predict(audio_feature, template, one_hot, args.optimize_last_layer)
         model = torch.ao.quantization.convert(model)
+
+        # Currently pytorch cant convert weight_norm(conv) to quantisized model - so Iam doing it my own and will open an issue for that
+        # Maybe it is not the right solution
+        # TODO somone asked this in https://discuss.pytorch.org/t/what-is-the-correct-way-to-qat-a-conv-layer-with-weight-norm/160562
+        weight_norm = nn.utils.weight_norm
+        if hasattr(nn.utils.parametrizations, "weight_norm"):
+            weight_norm = nn.utils.parametrizations.weight_norm
+
+        model.audio_encoder.encode.pos_conv_embed.conv = weight_norm(model.audio_encoder.encode.pos_conv_embed.conv , name="weight", dim=2)
     elif args.int8_quantization == "dynamic_int8":
         model = torch.ao.quantization.quantize_dynamic(
             model,  # the original model
