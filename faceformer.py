@@ -6,6 +6,7 @@ import copy
 import math
 import time
 from wav2vec import Wav2Vec2Model
+import types
 
 # Temporal Bias, inspired by ALiBi: https://github.com/ofirpress/attention_with_linear_biases
 def init_biased_mask(n_head, max_seq_len, period):
@@ -44,7 +45,7 @@ def enc_dec_mask(device, dataset, T, S):
 
 # Periodic Positional Encoding
 class PeriodicPositionalEncoding(nn.Module):
-    def __init__(self, d_model, dropout=0.1, period=25, max_seq_len=600):
+    def __init__(self, d_model, dropout=0.1, period=25, max_seq_len=600, quantize_statically=False):
         super(PeriodicPositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
         pe = torch.zeros(period, d_model)
@@ -56,10 +57,62 @@ class PeriodicPositionalEncoding(nn.Module):
         repeat_num = (max_seq_len//period) + 1
         pe = pe.repeat(1, repeat_num, 1)
         self.register_buffer('pe', pe)
+        self.quantize_statically = quantize_statically
+        if quantize_statically:
+            self.float_func = nn.quantized.FloatFunctional()
+            self.quant = torch.ao.quantization.QuantStub()
+            self.dequant = torch.ao.quantization.DeQuantStub()
+
     def forward(self, x):
-        x = x + self.pe[:, :x.size(1), :]
+        if self.quantize_statically:
+            if not self.pe.is_quantized:
+                self.pe = self.quant(self.pe)
+            temp = self.pe[:, :x.size(1), :]
+            x = self.float_func.add(x, temp)
+        else:
+            x = x + self.pe[:, :x.size(1), :]
         return self.dropout(x)
 
+def quantize_decoder_forward(
+        self,
+        tgt,
+        memory,
+        tgt_mask = None,
+        memory_mask = None,
+        tgt_key_padding_mask = None,
+        memory_key_padding_mask = None,
+        tgt_is_causal = False,
+        memory_is_causal = False):
+        r"""Pass the inputs (and mask) through the decoder layer.
+
+        Args:
+            tgt: the sequence to the decoder layer (required).
+            memory: the sequence from the last layer of the encoder (required).
+            tgt_mask: the mask for the tgt sequence (optional).
+            memory_mask: the mask for the memory sequence (optional).
+            tgt_key_padding_mask: the mask for the tgt keys per batch (optional).
+            memory_key_padding_mask: the mask for the memory keys per batch (optional).
+            tgt_is_causal: If specified, applies a causal mask as tgt mask.
+                Mutually exclusive with providing tgt_mask. Default: ``False``.
+            memory_is_causal: If specified, applies a causal mask as tgt mask.
+                Mutually exclusive with providing memory_mask. Default: ``False``.
+        Shape:
+            see the docs in Transformer class.
+        """
+        # see Fig. 1 of https://arxiv.org/pdf/2002.04745v1.pdf
+# nn.quantized.FloatFunctional().add(x, self_attention)
+# nn.quantized.QFunctional().add(x, self_attention)
+        x = tgt
+        if self.norm_first:
+            x = self.quant_func.add(x, self._sa_block(self.norm1(x), tgt_mask, tgt_key_padding_mask, tgt_is_causal))
+            x = self.quant_func.add(x, self._mha_block(self.norm2(x), memory, memory_mask, memory_key_padding_mask, memory_is_causal))
+            x = self.quant_func.add(x, self._ff_block(self.norm3(x)))
+        else:
+            x = self.norm1(self.quant_func.add(x, self._sa_block(x, tgt_mask, tgt_key_padding_mask, tgt_is_causal)))
+            x = self.norm2(self.quant_func.add(x, self._mha_block(x, memory, memory_mask, memory_key_padding_mask, memory_is_causal)))
+            x = self.norm3(self.quant_func.add(x, self._ff_block(x)))
+
+        return x
 class Faceformer(nn.Module):
     def __init__(self, args, quantize_statically=False):
         super(Faceformer, self).__init__()
@@ -76,10 +129,16 @@ class Faceformer(nn.Module):
         # motion encoder
         self.vertice_map = nn.Linear(args.vertice_dim, args.feature_dim)
         # periodic positional encoding 
-        self.PPE = PeriodicPositionalEncoding(args.feature_dim, period = args.period)
+        self.PPE = PeriodicPositionalEncoding(args.feature_dim, period = args.period, quantize_statically=quantize_statically)
         # temporal bias
+
         self.biased_mask = init_biased_mask(n_head = 4, max_seq_len = 600, period=args.period)
         decoder_layer = nn.TransformerDecoderLayer(d_model=args.feature_dim, nhead=4, dim_feedforward=2*args.feature_dim, batch_first=True)        
+        #TODO quantizise the decoder, super improtant!
+        if quantize_statically:
+            decoder_layer.forward = types.MethodType(quantize_decoder_forward, decoder_layer)
+            setattr(decoder_layer, 'quant_func', nn.quantized.FloatFunctional())
+
         self.transformer_decoder = nn.TransformerDecoder(decoder_layer, num_layers=1)
         # motion decoder
         self.vertice_map_r = nn.Linear(args.feature_dim, args.vertice_dim)
@@ -174,14 +233,14 @@ class Faceformer(nn.Module):
             if i==0:
                 vertice_emb = obj_embedding.unsqueeze(1) # (1,1,feature_dim)
                 style_emb = vertice_emb # The embedding of the speaker
+                # The vertice input are already quantized inside the PPE
                 vertice_input = self.PPE(style_emb)
             else:
                 # Encode the motions vertices with the periodic positional encoder
+                if self.quantize_statically:
+                    vertice_emb = self.quant(vertice_emb)
                 vertice_input = self.PPE(vertice_emb)
 
-            # Quantisize the vertice input
-            if self.quantize_statically:
-                vertice_input = self.quant(vertice_input)
             # Mask from the paper
             tgt_mask = self.biased_mask[:, :vertice_input.shape[1], :vertice_input.shape[1]].clone().detach().to(device=self.device)
             # Generating the mask of the input vertices for the decoder
@@ -205,12 +264,16 @@ class Faceformer(nn.Module):
             # Dequantisize the vertice output
             if self.quantize_statically:
                 new_output = self.dequant(new_output)
+                style_emb = self.dequant(style_emb)
+                vertice_emb = self.dequant(vertice_emb)
                 
             new_output = new_output + style_emb
 
             # If this line is commented the self.vertice_map_r wont be executed longer.
             vertice_emb = torch.cat((vertice_emb, new_output), 1)
             if optimize_last_layer:
+                if self.quantize_statically:
+                    vertice_out = self.dequant(vertice_out)
                 all_vertices_out_list.append(vertice_out)
 
         if optimize_last_layer:
