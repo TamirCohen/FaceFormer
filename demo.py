@@ -85,6 +85,7 @@ def test_model(args):
         # Currently pytorch cant convert weight_norm(conv) to quantisized model - so Iam doing it my own and will open an issue for that
         # Maybe it is not the right solution
         # TODO somone asked this in https://discuss.pytorch.org/t/what-is-the-correct-way-to-qat-a-conv-layer-with-weight-norm/160562
+        # Consider upgrade pytorch, I think they changed/fix it in this PR: https://github.com/pytorch/pytorch/pull/103001/files/ec49a529e43509179eee48dbaaac3638913b82a5#diff-b6cd5a3dc103e64e85a2a8cec5b3a9af430319a5c7603dcbb9b7d2642a930f6f
         normed_conv_model = model.audio_encoder.encoder.pos_conv_embed.conv
         normed_conv_model.register_parameter("weight" + '_g', weight_g)
         normed_conv_model.register_parameter("weight" + '_v', weight_v)

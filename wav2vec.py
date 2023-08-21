@@ -74,6 +74,7 @@ class Wav2Vec2Model(Wav2Vec2Model):
         super().__init__(config)
         self.quant = torch.ao.quantization.QuantStub()
         self.dequant = torch.ao.quantization.DeQuantStub()
+        self.float_func = nn.quantized.FloatFunctional()
 
     def forward(
         self,
