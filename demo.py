@@ -81,7 +81,7 @@ def test_model(args):
         model.PPE.qconfig = None
         model.vertice_map_r.qconfig = None
         model.vertice_map.qconfig = None
-        
+        model.transformer_decoder.qconfig = None
         
         # Not sure what modules needs to be fused, I just wrote here conv and relu
         #TODO!! use fuzed models

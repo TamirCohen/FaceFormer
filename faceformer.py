@@ -135,9 +135,9 @@ class Faceformer(nn.Module):
         self.biased_mask = init_biased_mask(n_head = 4, max_seq_len = 600, period=args.period)
         decoder_layer = nn.TransformerDecoderLayer(d_model=args.feature_dim, nhead=4, dim_feedforward=2*args.feature_dim, batch_first=True)        
         #TODO quantizise the decoder, super improtant!
-        if True:
-            decoder_layer.forward = types.MethodType(quantize_decoder_forward, decoder_layer)
-            setattr(decoder_layer, 'quant_func', nn.quantized.FloatFunctional())
+        # if True:
+        #     decoder_layer.forward = types.MethodType(quantize_decoder_forward, decoder_layer)
+        #     setattr(decoder_layer, 'quant_func', nn.quantized.FloatFunctional())
 
         self.transformer_decoder = nn.TransformerDecoder(decoder_layer, num_layers=1)
         # motion decoder
@@ -196,8 +196,11 @@ class Faceformer(nn.Module):
                 tgt_mask = self.biased_mask[:, :vertice_input.shape[1], :vertice_input.shape[1]].clone().detach().to(device=self.device)
                 memory_mask = enc_dec_mask(self.device, self.dataset, vertice_input.shape[1], hidden_states.shape[1])
                 
-                vertice_out = self.transformer_decoder(self.quant(vertice_input), self.quant(hidden_states), tgt_mask=tgt_mask, memory_mask=memory_mask)
-                vertice_out = self.vertice_map_r(vertice_out)
+                vertice_out = self.transformer_decoder(vertice_input, hidden_states, tgt_mask=tgt_mask, memory_mask=memory_mask)
+                
+                # vertice_out = self.transformer_decoder(self.quant(vertice_input), self.quant(hidden_states), tgt_mask=tgt_mask, memory_mask=memory_mask)
+                # vertice_out = self.dequant(vertice_out)
+                # vertice_out = self.vertice_map_r(vertice_out)
                 new_output = self.vertice_map(vertice_out[:,-1,:]).unsqueeze(1)
 
                 # Dequantisize the vertice output
