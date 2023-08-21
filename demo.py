@@ -72,23 +72,33 @@ def test_model(args):
     start_time = time.time()
     #TODO consider using intel ipex...
     if args.int8_quantization == "static_int8":
-        normed_conv_model = model.audio_encoder.encoder.pos_conv_embed.conv
-        weight_g, weight_v = normed_conv_model.weight_g, normed_conv_model.weight_v
+        # normed_conv_model = model.audio_encoder.encoder.pos_conv_embed.conv
+        # weight_g, weight_v = normed_conv_model.weight_g, normed_conv_model.weight_v
         model.qconfig = torch.ao.quantization.get_default_qconfig('x86')
+        model.audio_encoder.qconfig = None
+        model.obj_vector.qconfig = None
+        model.audio_feature_map.qconfig = None
+        model.PPE.qconfig = None
+        model.vertice_map_r.qconfig = None
+        model.vertice_map.qconfig = None
+        
+        
         # Not sure what modules needs to be fused, I just wrote here conv and relu
         #TODO!! use fuzed models
         # model_fused = torch.ao.quantization.fuse_modules(model, [['conv', 'activation']])
         model = torch.ao.quantization.prepare(model)
         model.predict(audio_feature, template, one_hot, args.optimize_last_layer)
         model = torch.ao.quantization.convert(model)
+        
+
 
         # Currently pytorch cant convert weight_norm(conv) to quantisized model - so Iam doing it my own and will open an issue for that
         # Maybe it is not the right solution
         # TODO somone asked this in https://discuss.pytorch.org/t/what-is-the-correct-way-to-qat-a-conv-layer-with-weight-norm/160562
         # Consider upgrade pytorch, I think they changed/fix it in this PR: https://github.com/pytorch/pytorch/pull/103001/files/ec49a529e43509179eee48dbaaac3638913b82a5#diff-b6cd5a3dc103e64e85a2a8cec5b3a9af430319a5c7603dcbb9b7d2642a930f6f
-        normed_conv_model = model.audio_encoder.encoder.pos_conv_embed.conv
-        normed_conv_model.register_parameter("weight" + '_g', weight_g)
-        normed_conv_model.register_parameter("weight" + '_v', weight_v)
+        # normed_conv_model = model.audio_encoder.encoder.pos_conv_embed.conv
+        # normed_conv_model.register_parameter("weight" + '_g', weight_g)
+        # normed_conv_model.register_parameter("weight" + '_v', weight_v)
 
 
     elif args.int8_quantization == "dynamic_int8":
@@ -98,14 +108,7 @@ def test_model(args):
             dtype=torch.qint8)  # the target dtype for quantized weights
 
 
-    with profile(activities=[ProfilerActivity.CPU],
-        profile_memory=True,
-        record_shapes=True,
-        with_stack=True,
-        experimental_config=torch._C._profiler._ExperimentalConfig(verbose=True),
-        on_trace_ready=torch.profiler.tensorboard_trace_handler(f'./logs/faceformer_{args.int8_quantization}')) as prof:
-        prediction = model.predict(audio_feature, template, one_hot, args.optimize_last_layer)
-    print(prof.key_averages(group_by_stack_n=5).table(sort_by="cpu_time_total", row_limit=20))
+    prediction = model.predict(audio_feature, template, one_hot, args.optimize_last_layer)
 
     print("Time for prediction: {}".format(time.time()-start_time))
     
@@ -117,7 +120,7 @@ def get_model(args):
     if args.int8_quantization == "dynamic_int8":
         return Faceformer(args)
     elif args.int8_quantization == "static_int8":
-        return Faceformer(args, quantize_statically=True)
+        return Faceformer(args, quantize_statically=False)
     else:
         return Faceformer(args)
         
