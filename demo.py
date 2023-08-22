@@ -5,11 +5,17 @@ import os,sys,shutil,argparse,copy,pickle
 import math,scipy
 from faceformer import Faceformer
 from transformers import Wav2Vec2FeatureExtractor,Wav2Vec2Processor
-
+import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from torch.ao.quantization import (
+  get_default_qconfig_mapping,
+  get_default_qat_qconfig_mapping,
+  QConfigMapping,
+)
+import torch.quantization.quantize_fx as quantize_fx
+import copy
 import cv2
 import tempfile
 from subprocess import call
@@ -17,12 +23,20 @@ os.environ['PYOPENGL_PLATFORM'] = 'osmesa' # egl
 import pyrender
 from psbody.mesh import Mesh
 import trimesh
+import random
+from torch.profiler import profile, record_function, ProfilerActivity
 
 @torch.no_grad()
 def test_model(args):
     if not os.path.exists(args.result_path):
         os.makedirs(args.result_path)
 
+    if args.set_seed:
+        torch.manual_seed(42)
+        torch.cuda.manual_seed(42)
+        random.seed(42)
+        np.random.seed(42)
+        print("Setting seed to 42...")
     #build model
     model = Faceformer(args)
     model.load_state_dict(torch.load(os.path.join(args.dataset, '{}.pth'.format(args.model_name)),  map_location=torch.device(args.device)))
@@ -54,10 +68,60 @@ def test_model(args):
     audio_feature = np.squeeze(processor(speech_array,sampling_rate=16000).input_values)
     audio_feature = np.reshape(audio_feature,(-1,audio_feature.shape[0]))
     audio_feature = torch.FloatTensor(audio_feature).to(device=args.device)
+    print("Model size before quantization: ")
+    print_size_of_model(model)
 
-    prediction = model.predict(audio_feature, template, one_hot)
+    if args.int8_quantization == "dynamic_fx":
+        raise NotImplementedError("dynamic_fx quantization is not supported because model is not traceable.")
+        print("Doing int8 quantization...")
+        model = transform_model_to_int8_fx(model, audio_feature)
+    elif args.int8_quantization == "dynamic_eager":
+        print("Doing dynamic_eager int8 quantization...")
+        model = transform_model_to_int8_eager(model)
+    print(model)
+    print("Model size after quantization: ")
+    print_size_of_model(model)
+    print("Starting to predict...")
+    start_time = time.time()
+    #TODO consider using intel ipex...
+    with profile(activities=[ProfilerActivity.CPU],
+        profile_memory=True,
+        record_shapes=True,
+        with_stack=True,
+        experimental_config=torch._C._profiler._ExperimentalConfig(verbose=True),
+        on_trace_ready=torch.profiler.tensorboard_trace_handler(f'./logs/faceformer_{args.int8_quantization}')) as prof:
+        prediction = model.predict(audio_feature, template, one_hot, args.optimize_last_layer)
+    print(prof.key_averages(group_by_stack_n=5).table(sort_by="cpu_time_total", row_limit=20))
+
+    print("Time for prediction: {}".format(time.time()-start_time))
+    
     prediction = prediction.squeeze() # (seq_len, V*3)
     np.save(os.path.join(args.result_path, test_name), prediction.detach().cpu().numpy())
+
+def transform_model_to_int8_eager(model):
+    model_int8 = torch.ao.quantization.quantize_dynamic(
+        model,  # the original model
+        {torch.nn.Linear},  # a set of layers to dynamically quantize
+        dtype=torch.qint8)  # the target dtype for quantized weights
+    return model_int8
+        
+def print_size_of_model(model):
+    torch.save(model.state_dict(), "temp.p")
+    print('Size (MB):', os.path.getsize("temp.p")/1e6)
+    os.remove('temp.p')
+
+def transform_model_to_int8_fx(model, input_fp32):
+    model_to_quantize = copy.deepcopy(model)
+    model_to_quantize.eval()
+    qconfig_mapping = QConfigMapping().set_global(torch.ao.quantization.default_dynamic_qconfig)
+    # a tuple of one or more example inputs are needed to trace the model
+    example_inputs = (input_fp32)
+    # prepare
+    model_prepared = quantize_fx.prepare_fx(model_to_quantize, qconfig_mapping, example_inputs)
+    # no calibration needed when we only have dynamic/weight_only quantization
+    # quantize
+    model_quantized = quantize_fx.convert_fx(model_prepared)
+    return model_quantized
 
 # The implementation of rendering is borrowed from VOCA: https://github.com/TimoBolkart/voca/blob/master/utils/rendering.py
 def render_mesh_helper(args,mesh, t_center, rot=np.zeros(3), tex_img=None, z_offset=0):
@@ -196,6 +260,11 @@ def main():
     parser.add_argument("--background_black", type=bool, default=True, help='whether to use black background')
     parser.add_argument("--template_path", type=str, default="templates.pkl", help='path of the personalized templates')
     parser.add_argument("--render_template_path", type=str, default="templates", help='path of the mesh in BIWI/FLAME topology')
+    parser.add_argument("--int8_quantization", type=str, default="", help='')
+    parser.add_argument("--optimize_last_layer", type=bool, default=False, help='Dont calculate linear layer for all')
+    parser.add_argument("--set_seed", type=bool, default=False, help='')
+
+
     args = parser.parse_args()   
 
     test_model(args)

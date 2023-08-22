@@ -1,0 +1,40 @@
+
+Regular Run
+--------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ---------------------------------------------------------------------------  
+                                        Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg       CPU Mem  Self CPU Mem    # of Calls  Source Location                                                              
+--------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ---------------------------------------------------------------------------  
+                                aten::linear         0.06%      19.422ms        68.48%       22.467s      78.281ms      10.79 Gb           0 b           287  <built-in function linear>                                                   
+                                                                                                                                                              torch/nn/modules/linear.py(113): forward                                     
+                                                                                                                                                              nn.Module: Linear_77                                                         
+                                                                                                                                                              faceformer.py(137): predict                                                  
+                                                                                                                                                              demo.py(86): test_model                                                      
+
+--------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ---------------------------------------------------------------------------  
+                                        Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg       CPU Mem  Self CPU Mem    # of Calls  Source Location                                                              
+--------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ---------------------------------------------------------------------------  
+                   quantized::linear_dynamic        74.53%       23.928s        74.57%       23.941s      83.417ms      10.79 Gb     -10.79 Gb           287  <built-in method linear_dynamic of PyCapsule object at 0x7f807467a270>       
+                                                                                                                                                              torch/_ops.py(497): __call__                                                 
+                                                                                                                                                              torch/ao/nn/quantized/dynamic/modules/linear.py(47): forward                 
+                                                                                                                                                              nn.Module: Linear_77                                                         
+                                                                                                                                                              faceformer.py(137): predict                                                  
+
+
+Commented out vertice_emb = torch.cat((vertice_emb, new_output), 1)
+
+--------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ---------------------------------------------------------------------------  
+                                        Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg       CPU Mem  Self CPU Mem    # of Calls  Source Location                                                              
+--------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ---------------------------------------------------------------------------  
+                   quantized::linear_dynamic        11.18%     548.923ms        11.25%     552.387ms       1.925ms      76.76 Mb     -78.09 Mb           287  <built-in method linear_dynamic of PyCapsule object at 0x7f34ca79c2d0>       
+                                                                                                                                                              torch/_ops.py(497): __call__                                                 
+                                                                                                                                                              torch/ao/nn/quantized/dynamic/modules/linear.py(47): forward                 
+                                                                                                                                                              nn.Module: Linear_77                                                         
+                                                                                                                                                              faceformer.py(137): predict  
+
+--------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ---------------------------------------------------------------------------  
+                                        Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg       CPU Mem  Self CPU Mem    # of Calls  Source Location                                                              
+--------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ---------------------------------------------------------------------------  
+                                aten::linear         0.19%      16.196ms        18.19%        1.525s       5.314ms      76.76 Mb           0 b           287  <built-in function linear>                                                   
+                                                                                                                                                              torch/nn/modules/linear.py(113): forward                                     
+                                                                                                                                                              nn.Module: Linear_77                                                         
+                                                                                                                                                              faceformer.py(137): predict                                                  
+                                                                                                                                                              demo.py(87): test_model                      

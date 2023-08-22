@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 import copy
 import math
+import time
 from wav2vec import Wav2Vec2Model
 
 # Temporal Bias, inspired by ALiBi: https://github.com/ofirpress/attention_with_linear_biases
@@ -134,31 +135,53 @@ class Faceformer(nn.Module):
         loss = torch.mean(loss)
         return loss
 
-    def predict(self, audio, template, one_hot):
+    def predict(self, audio, template, one_hot, optimize_last_layer=False):
         template = template.unsqueeze(1) # (1,1, V*3)
         obj_embedding = self.obj_vector(one_hot)
         hidden_states = self.audio_encoder(audio, self.dataset).last_hidden_state
+        all_vertices_out_list = []
         if self.dataset == "BIWI":
             frame_num = hidden_states.shape[1]//2
         elif self.dataset == "vocaset":
             frame_num = hidden_states.shape[1]
         hidden_states = self.audio_feature_map(hidden_states)
-
         for i in range(frame_num):
             if i==0:
                 vertice_emb = obj_embedding.unsqueeze(1) # (1,1,feature_dim)
-                style_emb = vertice_emb
+                style_emb = vertice_emb # The embedding of the speaker
                 vertice_input = self.PPE(style_emb)
             else:
+                # Encode the motions vertices with the periodic positional encoder
                 vertice_input = self.PPE(vertice_emb)
 
+            # Mask from the paper
             tgt_mask = self.biased_mask[:, :vertice_input.shape[1], :vertice_input.shape[1]].clone().detach().to(device=self.device)
+            # Generating the mask of the input vertices for the decoder
             memory_mask = enc_dec_mask(self.device, self.dataset, vertice_input.shape[1], hidden_states.shape[1])
+            # One layer of decoder
             vertice_out = self.transformer_decoder(vertice_input, hidden_states, tgt_mask=tgt_mask, memory_mask=memory_mask)
-            vertice_out = self.vertice_map_r(vertice_out)
-            new_output = self.vertice_map(vertice_out[:,-1,:]).unsqueeze(1)
-            new_output = new_output + style_emb
-            vertice_emb = torch.cat((vertice_emb, new_output), 1)
+            # Feed forward layer to generate the vertices
 
+            # This is the line that consumes most of the running time
+            # The time increases as the input changes
+            if optimize_last_layer:
+                vertice_out = vertice_out[:,-1,:]
+            vertice_out = self.vertice_map_r(vertice_out)
+            
+            # Taking into account only the last prediction of the vertices
+            if not optimize_last_layer:
+                new_output = self.vertice_map(vertice_out[:,-1,:]).unsqueeze(1)
+            else:
+                new_output = self.vertice_map(vertice_out).unsqueeze(1)
+            new_output = new_output + style_emb
+
+            # If this line is commented the self.vertice_map_r wont be executed longer.
+            vertice_emb = torch.cat((vertice_emb, new_output), 1)
+            if optimize_last_layer:
+                all_vertices_out_list.append(vertice_out)
+
+        if optimize_last_layer:
+            vertice_out = torch.stack(all_vertices_out_list, dim=1)
         vertice_out = vertice_out + template
         return vertice_out
+
