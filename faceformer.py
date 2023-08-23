@@ -135,9 +135,9 @@ class Faceformer(nn.Module):
         self.biased_mask = init_biased_mask(n_head = 4, max_seq_len = 600, period=args.period)
         decoder_layer = nn.TransformerDecoderLayer(d_model=args.feature_dim, nhead=4, dim_feedforward=2*args.feature_dim, batch_first=True)        
         #TODO quantizise the decoder, super improtant!
-        if quantize_statically:
-            decoder_layer.forward = types.MethodType(quantize_decoder_forward, decoder_layer)
-            setattr(decoder_layer, 'quant_func', nn.quantized.FloatFunctional())
+        # if quantize_statically:
+        #     decoder_layer.forward = types.MethodType(quantize_decoder_forward, decoder_layer)
+        #     setattr(decoder_layer, 'quant_func', nn.quantized.FloatFunctional())
 
         self.transformer_decoder = nn.TransformerDecoder(decoder_layer, num_layers=1)
         # motion decoder
@@ -147,10 +147,10 @@ class Faceformer(nn.Module):
         self.device = args.device
         nn.init.constant_(self.vertice_map_r.weight, 0)
         nn.init.constant_(self.vertice_map_r.bias, 0)
-        self.quantize_statically = quantize_statically
-        if self.quantize_statically:
+        if quantize_statically:
             self.quant = torch.ao.quantization.QuantStub()
             self.dequant = torch.ao.quantization.DeQuantStub()
+        self.quantize_statically = False
 
     def forward(self, audio, template, vertice, one_hot, criterion,teacher_forcing=True):
         # tgt_mask: :math:`(T, T)`.
@@ -162,7 +162,7 @@ class Faceformer(nn.Module):
         # quantize the audio!
         if self.quantize_statically:
             audio = self.quant(audio)
-        hidden_states = self.audio_encoder(audio, self.dataset, frame_num=frame_num, quantize_statically=self.quantize_statically).last_hidden_state
+        hidden_states = self.audio_encoder(audio, self.dataset, frame_num=frame_num).last_hidden_state
         if self.dataset == "BIWI":
             if hidden_states.shape[1]<frame_num*2:
                 vertice = vertice[:, :hidden_states.shape[1]//2]
@@ -214,13 +214,13 @@ class Faceformer(nn.Module):
     def predict(self, audio, template, one_hot, optimize_last_layer=False):
         template = template.unsqueeze(1) # (1,1, V*3)
 
-        if self.quantize_statically:
-            one_hot = self.quant(one_hot)
+        # if self.quantize_statically:
+        #     one_hot = self.quant(one_hot)
 
         obj_embedding = self.obj_vector(one_hot)
         
-        if self.quantize_statically:
-            audio = self.quant(audio)
+        # if self.quantize_statically:
+        #     audio = self.quant(audio)
     
         hidden_states = self.audio_encoder(audio, self.dataset, quantize_statically=self.quantize_statically).last_hidden_state
         all_vertices_out_list = []
@@ -237,8 +237,8 @@ class Faceformer(nn.Module):
                 vertice_input = self.PPE(style_emb)
             else:
                 # Encode the motions vertices with the periodic positional encoder
-                if self.quantize_statically:
-                    vertice_emb = self.quant(vertice_emb)
+                # if self.quantize_statically:
+                #     vertice_emb = self.quant(vertice_emb)
                 vertice_input = self.PPE(vertice_emb)
 
             # Mask from the paper
@@ -253,6 +253,7 @@ class Faceformer(nn.Module):
             # The time increases as the input changes
             if optimize_last_layer:
                 vertice_out = vertice_out[:,-1,:]
+            vertice_out = self.quant(vertice_out)
             vertice_out = self.vertice_map_r(vertice_out)
             
             # Taking into account only the last prediction of the vertices
@@ -261,19 +262,16 @@ class Faceformer(nn.Module):
             else:
                 new_output = self.vertice_map(vertice_out).unsqueeze(1)
             
-            # Dequantisize the vertice output
-            if self.quantize_statically:
-                new_output = self.dequant(new_output)
-                style_emb = self.dequant(style_emb)
-                vertice_emb = self.dequant(vertice_emb)
+            new_output = self.dequant(new_output)
+            vertice_out = self.dequant(vertice_out)
                 
             new_output = new_output + style_emb
 
             # If this line is commented the self.vertice_map_r wont be executed longer.
             vertice_emb = torch.cat((vertice_emb, new_output), 1)
             if optimize_last_layer:
-                if self.quantize_statically:
-                    vertice_out = self.dequant(vertice_out)
+                # if self.quantize_statically:
+                #     vertice_out = self.dequant(vertice_out)
                 all_vertices_out_list.append(vertice_out)
 
         if optimize_last_layer:
