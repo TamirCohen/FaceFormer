@@ -23,6 +23,21 @@ from psbody.mesh import Mesh
 import trimesh
 import random
 from torch.profiler import profile, record_function, ProfilerActivity
+import torch.quantization._numeric_suite as ns
+
+def compute_error(x, y):
+    Ps = torch.norm(x)
+    Pn = torch.norm(x-y)
+    return 20*torch.log10(Ps/Pn)
+
+def print_quantization_error(model, quantized_model):
+    wt_compare_dict = ns.compare_weights(model.state_dict(), quantized_model.state_dict())
+    print("SQNR quantization error:")
+    for key in wt_compare_dict:
+        try:
+            print(key, compute_error(wt_compare_dict[key]['float'], wt_compare_dict[key]['quantized'].dequantize()))
+        except:
+            print("Failed to compute quantization error of layer {}".format(key))
 
 @torch.no_grad()
 def test_model(args):
@@ -70,6 +85,7 @@ def test_model(args):
 
     print("Starting to predict...")
     start_time = time.time()
+    old_model = copy.deepcopy(model)
     #TODO consider using intel ipex...
     if args.int8_quantization == "static_int8":
         normed_conv_model = model.audio_encoder.encoder.pos_conv_embed.conv
@@ -97,7 +113,7 @@ def test_model(args):
             {torch.nn.Linear},  # a set of layers to dynamically quantize
             dtype=torch.qint8)  # the target dtype for quantized weights
 
-
+    print_quantization_error(old_model, model)
     with profile(activities=[ProfilerActivity.CPU],
         profile_memory=True,
         record_shapes=True,
