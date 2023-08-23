@@ -436,6 +436,8 @@ class Wav2Vec2FeatureEncoder(nn.Module):
         self.conv_layers = nn.ModuleList(conv_layers)
         self.gradient_checkpointing = False
         self._requires_grad = True
+        self.quant = torch.ao.quantization.QuantStub()
+        self.dequant = torch.ao.quantization.DeQuantStub()
 
     def _freeze_parameters(self):
         for param in self.parameters():
@@ -449,6 +451,7 @@ class Wav2Vec2FeatureEncoder(nn.Module):
         if self._requires_grad and self.training:
             hidden_states.requires_grad = True
 
+        hidden_states = self.quant(hidden_states)
         for conv_layer in self.conv_layers:
             if self._requires_grad and self.gradient_checkpointing and self.training:
 
@@ -464,6 +467,8 @@ class Wav2Vec2FeatureEncoder(nn.Module):
                 )
             else:
                 hidden_states = conv_layer(hidden_states)
+        
+        hidden_states = self.dequant(hidden_states)
 
         return hidden_states
 
@@ -597,11 +602,8 @@ class Wav2Vec2Attention(nn.Module):
         src_len = key_states.size(1)
 
 
-        key_states = self.dequant(key_states)
-        query_states = self.dequant(query_states)
         attn_weights = torch.bmm(query_states, key_states.transpose(1, 2))
         
-        attn_weights = self.quant(attn_weights)
         if attn_weights.size() != (bsz * self.num_heads, tgt_len, src_len):
             raise ValueError(
                 f"Attention weights should be of size {(bsz * self.num_heads, tgt_len, src_len)}, but is"
@@ -617,9 +619,7 @@ class Wav2Vec2Attention(nn.Module):
             attn_weights = attn_weights.view(bsz * self.num_heads, tgt_len, src_len)
 
         
-        attn_weights = self.dequant(attn_weights)
         attn_weights = nn.functional.softmax(attn_weights, dim=-1)
-        attn_weights = self.quant(attn_weights)
 
         if layer_head_mask is not None:
             if layer_head_mask.size() != (self.num_heads,):
@@ -643,10 +643,7 @@ class Wav2Vec2Attention(nn.Module):
         attn_probs = nn.functional.dropout(attn_weights, p=self.dropout, training=self.training)
 
         
-        attn_probs = self.dequant(attn_probs)
-        value_states = self.dequant(value_states)
         attn_output = torch.bmm(attn_probs, value_states)
-        attn_output = self.quant(attn_output)
 
         if attn_output.size() != (bsz * self.num_heads, tgt_len, self.head_dim):
             raise ValueError(
@@ -1028,6 +1025,8 @@ class Wav2Vec2GumbelVectorQuantizer(nn.Module):
 class Wav2Vec2Adapter(nn.Module):
     def __init__(self, config):
         super().__init__()
+        self.dequant = torch.ao.quantization.DeQuantStub()
+        self.quant = torch.ao.quantization.QuantStub()
 
         # feature dim might need to be down-projected
         if config.output_hidden_size != config.hidden_size:
@@ -1047,10 +1046,13 @@ class Wav2Vec2Adapter(nn.Module):
 
         hidden_states = hidden_states.transpose(1, 2)
 
+        hidden_states = self.quant(hidden_states)
         for layer in self.layers:
             layerdrop_prob = np.random.random()
             if not self.training or (layerdrop_prob > self.layerdrop):
                 hidden_states = layer(hidden_states)
+        hidden_states = self.dequant(hidden_states)
+        
 
         hidden_states = hidden_states.transpose(1, 2)
         return hidden_states
