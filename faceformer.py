@@ -108,9 +108,9 @@ def quantize_decoder_forward(
             x = self.quant_func.add(x, self._mha_block(self.norm2(x), memory, memory_mask, memory_key_padding_mask, memory_is_causal))
             x = self.quant_func.add(x, self._ff_block(self.norm3(x)))
         else:
-            x = self.norm1(self.quant_func.add(x, self._sa_block(x, tgt_mask, tgt_key_padding_mask, tgt_is_causal)))
-            x = self.norm2(self.quant_func.add(x, self._mha_block(x, memory, memory_mask, memory_key_padding_mask, memory_is_causal)))
-            x = self.norm3(self.quant_func.add(x, self._ff_block(x)))
+            x = self.norm1(x + self.dequant(self._sa_block(self.quant(x), tgt_mask, tgt_key_padding_mask, tgt_is_causal)))
+            x = self.norm2(x + self.dequant(self._mha_block(self.quant(x), self.quant(memory), memory_mask, memory_key_padding_mask, memory_is_causal)))
+            x = self.norm3(x + self._ff_block(x))
 
         return x
 class Faceformer(nn.Module):
@@ -135,10 +135,13 @@ class Faceformer(nn.Module):
         self.biased_mask = init_biased_mask(n_head = 4, max_seq_len = 600, period=args.period)
         decoder_layer = nn.TransformerDecoderLayer(d_model=args.feature_dim, nhead=4, dim_feedforward=2*args.feature_dim, batch_first=True)        
         #TODO quantizise the decoder, super improtant!
-        # if quantize_statically:
-        #     decoder_layer.forward = types.MethodType(quantize_decoder_forward, decoder_layer)
-        #     setattr(decoder_layer, 'quant_func', nn.quantized.FloatFunctional())
-
+        if quantize_statically:
+            decoder_layer.forward = types.MethodType(quantize_decoder_forward, decoder_layer)
+            setattr(decoder_layer, 'quant_func', nn.quantized.FloatFunctional())
+            setattr(decoder_layer, 'quant', torch.ao.quantization.QuantStub())
+            setattr(decoder_layer, 'dequant', torch.ao.quantization.DeQuantStub())
+  
+        # self._modules["layers"][0]
         self.transformer_decoder = nn.TransformerDecoder(decoder_layer, num_layers=1)
         # motion decoder
         self.vertice_map_r = nn.Linear(args.feature_dim, args.vertice_dim)
