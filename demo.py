@@ -75,7 +75,12 @@ def test_model(args):
         # normed_conv_model = model.audio_encoder.encoder.pos_conv_embed.conv
         # weight_g, weight_v = normed_conv_model.weight_g, normed_conv_model.weight_v        
         model.qconfig = torch.ao.quantization.get_default_qconfig('x86')
-        model.audio_encoder.qconfig = None
+        # feature_extractor
+        #  adapter
+        model.audio_encoder.feature_projection.qconfig = None
+        model.audio_encoder.masked_spec_embed.qconfig = None
+        model.audio_encoder.encoder.qconfig = None
+        
         model.obj_vector.qconfig = None
         model.audio_feature_map.qconfig = None
         model.PPE.qconfig = None
