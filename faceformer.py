@@ -45,7 +45,7 @@ def enc_dec_mask(device, dataset, T, S):
 
 # Periodic Positional Encoding
 class PeriodicPositionalEncoding(nn.Module):
-    def __init__(self, d_model, dropout=0.1, period=25, max_seq_len=600, quantize_statically=False):
+    def __init__(self, d_model, dropout=0.1, period=25, max_seq_len=600):
         super(PeriodicPositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
         pe = torch.zeros(period, d_model)
@@ -57,20 +57,15 @@ class PeriodicPositionalEncoding(nn.Module):
         repeat_num = (max_seq_len//period) + 1
         pe = pe.repeat(1, repeat_num, 1)
         self.register_buffer('pe', pe)
-        self.quantize_statically = quantize_statically
-        if quantize_statically:
-            self.float_func = nn.quantized.FloatFunctional()
-            self.quant = torch.ao.quantization.QuantStub()
-            self.dequant = torch.ao.quantization.DeQuantStub()
+        self.float_func = nn.quantized.FloatFunctional()
+        self.quant = torch.ao.quantization.QuantStub()
+        self.dequant = torch.ao.quantization.DeQuantStub()
 
     def forward(self, x):
-        if self.quantize_statically:
-            if not self.pe.is_quantized:
-                self.pe = self.quant(self.pe)
-            temp = self.pe[:, :x.size(1), :]
-            x = self.float_func.add(x, temp)
-        else:
-            x = x + self.pe[:, :x.size(1), :]
+        if not self.pe.is_quantized:
+            self.pe = self.quant(self.pe)
+        temp = self.pe[:, :x.size(1), :]
+        x = self.float_func.add(x, temp)
         return self.dropout(x)
 
 def quantize_decoder_forward(
@@ -114,14 +109,13 @@ def quantize_decoder_forward(
 
         return x
 class Faceformer(nn.Module):
-    def __init__(self, args, quantize_statically=False):
+    def __init__(self, args):
         super(Faceformer, self).__init__()
         """
         audio: (batch_size, raw_wav)
         template: (batch_size, V*3)
         vertice: (batch_size, seq_len, V*3)
         """
-        quantize_statically = False
         self.dataset = args.dataset
         self.audio_encoder = Wav2Vec2Model.from_pretrained("facebook/wav2vec2-base-960h")
         # wav2vec 2.0 weights initialization
@@ -130,7 +124,7 @@ class Faceformer(nn.Module):
         # motion encoder
         self.vertice_map = nn.Linear(args.vertice_dim, args.feature_dim)
         # periodic positional encoding 
-        self.PPE = PeriodicPositionalEncoding(args.feature_dim, period = args.period, quantize_statically=quantize_statically)
+        self.PPE = PeriodicPositionalEncoding(args.feature_dim, period = args.period)
         # temporal bias
 
         self.biased_mask = init_biased_mask(n_head = 4, max_seq_len = 600, period=args.period)
@@ -152,9 +146,9 @@ class Faceformer(nn.Module):
         self.device = args.device
         nn.init.constant_(self.vertice_map_r.weight, 0)
         nn.init.constant_(self.vertice_map_r.bias, 0)
-        self.quant_vertice_out = torch.ao.quantization.QuantStub()
-        self.dequant = torch.ao.quantization.DeQuantStub()
-        self.quantize_statically = False
+        if self.layers_to_quantize:
+            self.quant_vertice_out = torch.ao.quantization.QuantStub()
+            self.dequant = torch.ao.quantization.DeQuantStub()
 
     def forward(self, audio, template, vertice, one_hot, criterion,teacher_forcing=True):
         # tgt_mask: :math:`(T, T)`.
@@ -163,9 +157,6 @@ class Faceformer(nn.Module):
         obj_embedding = self.obj_vector(one_hot)#(1, feature_dim)
         frame_num = vertice.shape[1]
         
-        # quantize the audio!
-        if False:
-            audio = self.quant_vertice_out(audio)
         hidden_states = self.audio_encoder(audio, self.dataset, frame_num=frame_num).last_hidden_state
         if self.dataset == "BIWI":
             if hidden_states.shape[1]<frame_num*2:
@@ -195,8 +186,8 @@ class Faceformer(nn.Module):
                     vertice_input = self.PPE(vertice_emb)
                 
                 # Quantisize the vertice input
-                if self.quantize_statically:
-                    vertice_input = self.quant_vertice_out(vertice_input)
+                # if self.quantize_statically:
+                #     vertice_input = self.quant_vertice_out(vertice_input)
 
                 tgt_mask = self.biased_mask[:, :vertice_input.shape[1], :vertice_input.shape[1]].clone().detach().to(device=self.device)
                 memory_mask = enc_dec_mask(self.device, self.dataset, vertice_input.shape[1], hidden_states.shape[1])
@@ -205,8 +196,8 @@ class Faceformer(nn.Module):
                 new_output = self.vertice_map(vertice_out[:,-1,:]).unsqueeze(1)
 
                 # Dequantisize the vertice output
-                if self.quantize_statically:
-                    new_output = self.dequant(new_output)
+                # if self.quantize_statically:
+                #     new_output = self.dequant(new_output)
                 new_output = new_output + style_emb
                 vertice_emb = torch.cat((vertice_emb, new_output), 1)
 
@@ -226,7 +217,7 @@ class Faceformer(nn.Module):
         # if self.quantize_statically:
         #     audio = self.quant(audio)
     
-        hidden_states = self.audio_encoder(audio, self.dataset, quantize_statically=self.quantize_statically).last_hidden_state
+        hidden_states = self.audio_encoder(audio, self.dataset).last_hidden_state
         all_vertices_out_list = []
         if self.dataset == "BIWI":
             frame_num = hidden_states.shape[1]//2

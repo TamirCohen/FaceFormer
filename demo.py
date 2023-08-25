@@ -36,7 +36,7 @@ def test_model(args):
         np.random.seed(42)
         print("Setting seed to 42...")
     #build model
-    model = get_model(args)
+    model = Faceformer(args)
     model.load_state_dict(torch.load(os.path.join(args.dataset, '{}.pth'.format(args.model_name)),  map_location=torch.device(args.device)))
     model = model.to(torch.device(args.device))
     model.eval()
@@ -116,7 +116,12 @@ def test_model(args):
             {torch.nn.Linear},  # a set of layers to dynamically quantize
             dtype=torch.qint8)  # the target dtype for quantized weights
 
+    print("Model size before quantization: ")
+    print_size_of_model(old_model)
+    print("Model size after quantization: ")
+    print_size_of_model(model)
     print(model)
+    print("Starting to predict...")
 
     with profile(activities=[ProfilerActivity.CPU],
         profile_memory=True,
@@ -137,15 +142,6 @@ def test_model(args):
     prediction = prediction.squeeze() # (seq_len, V*3)
     np.save(os.path.join(args.result_path, test_name), prediction.detach().cpu().numpy())
 
-
-def get_model(args):
-    if args.int8_quantization == "dynamic_int8":
-        return Faceformer(args)
-    elif args.int8_quantization == "static_int8":
-        return Faceformer(args, quantize_statically=True)
-    else:
-        return Faceformer(args)
-        
 def print_size_of_model(model):
     torch.save(model.state_dict(), "temp.p")
     print('Size (MB):', os.path.getsize("temp.p")/1e6)
