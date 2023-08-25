@@ -117,6 +117,7 @@ class Faceformer(nn.Module):
         vertice: (batch_size, seq_len, V*3)
         """
         self.dataset = args.dataset
+        self.args = args
         self.audio_encoder = Wav2Vec2Model.from_pretrained("facebook/wav2vec2-base-960h")
         # wav2vec 2.0 weights initialization
         self.audio_encoder.feature_extractor._freeze_parameters()
@@ -247,7 +248,9 @@ class Faceformer(nn.Module):
             # The time increases as the input changes
             if optimize_last_layer:
                 vertice_out = vertice_out[:,-1,:]
-            vertice_out = self.quant_vertice_out(vertice_out)
+            
+            if "linear_layers" in self.args.static_quantized_layers:
+                vertice_out = self.quant_vertice_out(vertice_out)
             vertice_out = self.vertice_map_r(vertice_out)
             
             # Taking into account only the last prediction of the vertices
@@ -256,8 +259,9 @@ class Faceformer(nn.Module):
             else:
                 new_output = self.vertice_map(vertice_out).unsqueeze(1)
             
-            new_output = self.dequant(new_output)
-            vertice_out = self.dequant(vertice_out)
+            if "linear_layers" in self.args.static_quantized_layers:
+                new_output = self.dequant(new_output)
+                vertice_out = self.dequant(vertice_out)
                 
             new_output = new_output + style_emb
 
