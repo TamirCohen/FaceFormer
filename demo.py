@@ -40,6 +40,7 @@ def test_model(args):
     model.load_state_dict(torch.load(os.path.join(args.dataset, '{}.pth'.format(args.model_name)),  map_location=torch.device(args.device)))
     model = model.to(torch.device(args.device))
     model.eval()
+    old_model = copy.deepcopy(model)
 
     template_file = os.path.join(args.dataset, args.template_path)
     with open(template_file, 'rb') as fin:
@@ -126,7 +127,12 @@ def test_model(args):
         prediction = model.predict(audio_feature, template, one_hot, args.optimize_last_layer)
     print(prof.key_averages(group_by_stack_n=5).table(sort_by="cpu_time_total", row_limit=20))
 
-    print("Time for prediction: {}".format(time.time()-start_time))
+    if args.calculate_mse:
+        print("Calculating MSE...")
+        non_quantized_prediction = old_model.predict(audio_feature, template, one_hot, args.optimize_last_layer)
+
+        mse = F.mse_loss(prediction, non_quantized_prediction)
+        print("MSE IS: ", mse)
     
     prediction = prediction.squeeze() # (seq_len, V*3)
     np.save(os.path.join(args.result_path, test_name), prediction.detach().cpu().numpy())
@@ -298,6 +304,7 @@ def main():
     parser.add_argument("--int8_quantization", type=str, default="", help='')
     parser.add_argument("--optimize_last_layer", type=bool, default=False, help='Dont calculate linear layer for all')
     parser.add_argument("--set_seed", type=bool, default=False, help='')
+    parser.add_argument("--calculate_mse", type=bool, default=False, help='')
 
 
     args = parser.parse_args()   
