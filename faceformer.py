@@ -146,9 +146,8 @@ class Faceformer(nn.Module):
         self.device = args.device
         nn.init.constant_(self.vertice_map_r.weight, 0)
         nn.init.constant_(self.vertice_map_r.bias, 0)
-        if self.layers_to_quantize:
-            self.quant_vertice_out = torch.ao.quantization.QuantStub()
-            self.dequant = torch.ao.quantization.DeQuantStub()
+        self.quant_vertice_out = torch.ao.quantization.QuantStub()
+        self.dequant = torch.ao.quantization.DeQuantStub()
 
     def forward(self, audio, template, vertice, one_hot, criterion,teacher_forcing=True):
         # tgt_mask: :math:`(T, T)`.
