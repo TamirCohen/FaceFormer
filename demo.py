@@ -76,6 +76,10 @@ def test_model(args):
         # normed_conv_model = model.audio_encoder.encoder.pos_conv_embed.conv
         # weight_g, weight_v = normed_conv_model.weight_g, normed_conv_model.weight_v        
         model.qconfig = torch.ao.quantization.get_default_qconfig('x86')
+        if not "linear_layers" in args.static_quantized_layers:
+            model.vertice_map_r.qconfig = None
+            model.vertice_map.qconfig = None
+            
         #Quantizing vertice_map_r, vertice_map
         model.audio_encoder.qconfig = None
         model.obj_vector.qconfig = None
@@ -84,15 +88,18 @@ def test_model(args):
         
         # model.transformer_decoder.qconfig = None
         # Quantizing self_attn multihead_attn
-        model.transformer_decoder._modules["layers"][0].norm1.qconfig = None
-        model.transformer_decoder._modules["layers"][0].norm2.qconfig = None
-        model.transformer_decoder._modules["layers"][0].norm3.qconfig = None
-        model.transformer_decoder._modules["layers"][0].dropout1.qconfig = None
-        model.transformer_decoder._modules["layers"][0].dropout2.qconfig = None
-        model.transformer_decoder._modules["layers"][0].dropout3.qconfig = None
-        model.transformer_decoder._modules["layers"][0].dropout.qconfig = None
-        model.transformer_decoder._modules["layers"][0].linear1.qconfig = None
-        model.transformer_decoder._modules["layers"][0].linear2.qconfig = None
+        if "decoder_attention" in args.static_quantized_layers:
+            model.transformer_decoder._modules["layers"][0].norm1.qconfig = None
+            model.transformer_decoder._modules["layers"][0].norm2.qconfig = None
+            model.transformer_decoder._modules["layers"][0].norm3.qconfig = None
+            model.transformer_decoder._modules["layers"][0].dropout1.qconfig = None
+            model.transformer_decoder._modules["layers"][0].dropout2.qconfig = None
+            model.transformer_decoder._modules["layers"][0].dropout3.qconfig = None
+            model.transformer_decoder._modules["layers"][0].dropout.qconfig = None
+            model.transformer_decoder._modules["layers"][0].linear1.qconfig = None
+            model.transformer_decoder._modules["layers"][0].linear2.qconfig = None
+        else:
+            model.transformer_decoder.qconfig = None
 
         # Not sure what modules needs to be fused, I just wrote here conv and relu
         #TODO!! use fuzed models
@@ -301,6 +308,7 @@ def main():
     parser.add_argument("--optimize_last_layer", type=bool, default=False, help='Dont calculate linear layer for all')
     parser.add_argument("--set_seed", type=bool, default=False, help='')
     parser.add_argument("--calculate_mse", type=bool, default=False, help='')
+    parser.add_argument('--static_quantized_layers', nargs='*', help='<Layers to quantize', default=[])
 
 
     args = parser.parse_args()   
