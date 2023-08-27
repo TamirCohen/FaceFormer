@@ -86,13 +86,14 @@ def test_model(args):
             model.audio_encoder.feature_projection.qconfig = None
             model.audio_encoder.masked_spec_embed.qconfig = None
             model.audio_encoder.encoder.qconfig = None
+        else:
+            model.audio_encoder.qconfig = None
         
         if not "linear_layers" in args.static_quantized_layers:
             model.vertice_map_r.qconfig = None
             model.vertice_map.qconfig = None
             
         #Quantizing vertice_map_r, vertice_map
-        model.audio_encoder.qconfig = None
         model.obj_vector.qconfig = None
         model.audio_feature_map.qconfig = None
         model.PPE.qconfig = None
