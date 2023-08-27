@@ -24,6 +24,11 @@ import trimesh
 import random
 from torch.profiler import profile, record_function, ProfilerActivity
 
+# def compute_error(x, y):
+#     Ps = torch.norm(x)
+#     Pn = torch.norm(x-y)
+#     return 20*torch.log10(Ps/Pn)
+
 @torch.no_grad()
 def test_model(args):
     if not os.path.exists(args.result_path):

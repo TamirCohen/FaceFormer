@@ -241,6 +241,22 @@ class Faceformer(nn.Module):
             # Generating the mask of the input vertices for the decoder
             memory_mask = enc_dec_mask(self.device, self.dataset, vertice_input.shape[1], hidden_states.shape[1])
             # One layer of decoder
+
+            # Calculating the SQNR
+            #  vertice_out = self.transformer_decoder(vertice_input, hidden_states, tgt_mask=tgt_mask, memory_mask=memory_mask)
+            # from demo import *
+            # old_model = Faceformer(self.args)
+            # old_model.load_state_dict(torch.load(os.path.join(self.args.dataset, '{}.pth'.format(self.args.model_name)),  map_location=torch.device(self.args.device)))
+            # vertice_out_original = old_model.transformer_decoder(vertice_input, hidden_states, tgt_mask=tgt_mask, memory_mask=memory_mask)
+            # F.mse_loss(vertice_out_original, vertice_out) 
+            # compute_error(vertice_out_original, vertice_out)
+            # def compute_error(x, y):
+            #   Ps = torch.norm(x)
+            #   Pn = torch.norm(x-y)
+            #   return 20*torch.log10(Ps/Pn)
+
+            # if type(self.transformer_decoder._modules["layers"][0].quant_sa_block_x) != torch.ao.quantization.QuantStub:
+            #     breakpoint()
             vertice_out = self.transformer_decoder(vertice_input, hidden_states, tgt_mask=tgt_mask, memory_mask=memory_mask)
             # Feed forward layer to generate the vertices
 
