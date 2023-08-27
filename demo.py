@@ -24,6 +24,11 @@ import trimesh
 import random
 from torch.profiler import profile, record_function, ProfilerActivity
 
+# def compute_error(x, y):
+#     Ps = torch.norm(x)
+#     Pn = torch.norm(x-y)
+#     return 20*torch.log10(Ps/Pn)
+
 @torch.no_grad()
 def test_model(args):
     if not os.path.exists(args.result_path):
@@ -36,10 +41,11 @@ def test_model(args):
         np.random.seed(42)
         print("Setting seed to 42...")
     #build model
-    model = get_model(args)
+    model = Faceformer(args)
     model.load_state_dict(torch.load(os.path.join(args.dataset, '{}.pth'.format(args.model_name)),  map_location=torch.device(args.device)))
     model = model.to(torch.device(args.device))
     model.eval()
+    old_model = copy.deepcopy(model)
 
     template_file = os.path.join(args.dataset, args.template_path)
     with open(template_file, 'rb') as fin:
@@ -75,18 +81,36 @@ def test_model(args):
         # normed_conv_model = model.audio_encoder.encoder.pos_conv_embed.conv
         # weight_g, weight_v = normed_conv_model.weight_g, normed_conv_model.weight_v        
         model.qconfig = torch.ao.quantization.get_default_qconfig('x86')
-        # feature_extractor
-        #  adapter
-        model.audio_encoder.feature_projection.qconfig = None
-        model.audio_encoder.masked_spec_embed.qconfig = None
-        model.audio_encoder.encoder.qconfig = None
         
+        if "conv_layers" in args.static_quantized_layers:
+            model.audio_encoder.feature_projection.qconfig = None
+            model.audio_encoder.masked_spec_embed.qconfig = None
+            model.audio_encoder.encoder.qconfig = None
+        
+        if not "linear_layers" in args.static_quantized_layers:
+            model.vertice_map_r.qconfig = None
+            model.vertice_map.qconfig = None
+            
+        #Quantizing vertice_map_r, vertice_map
+        model.audio_encoder.qconfig = None
         model.obj_vector.qconfig = None
         model.audio_feature_map.qconfig = None
         model.PPE.qconfig = None
-        # model.vertice_map_r.qconfig = torch.ao.quantization.get_default_qconfig('x86')
-        # model.vertice_map.qconfig = torch.ao.quantization.get_default_qconfig('x86')
-        model.transformer_decoder.qconfig = None
+        
+        # model.transformer_decoder.qconfig = None
+        # Quantizing self_attn multihead_attn
+        if "decoder_attention" in args.static_quantized_layers:
+            model.transformer_decoder._modules["layers"][0].norm1.qconfig = None
+            model.transformer_decoder._modules["layers"][0].norm2.qconfig = None
+            model.transformer_decoder._modules["layers"][0].norm3.qconfig = None
+            model.transformer_decoder._modules["layers"][0].dropout1.qconfig = None
+            model.transformer_decoder._modules["layers"][0].dropout2.qconfig = None
+            model.transformer_decoder._modules["layers"][0].dropout3.qconfig = None
+            model.transformer_decoder._modules["layers"][0].dropout.qconfig = None
+            model.transformer_decoder._modules["layers"][0].linear1.qconfig = None
+            model.transformer_decoder._modules["layers"][0].linear2.qconfig = None
+        else:
+            model.transformer_decoder.qconfig = None
 
         # Not sure what modules needs to be fused, I just wrote here conv and relu
         #TODO!! use fuzed models
@@ -110,7 +134,12 @@ def test_model(args):
             {torch.nn.Linear},  # a set of layers to dynamically quantize
             dtype=torch.qint8)  # the target dtype for quantized weights
 
+    print("Model size before quantization: ")
+    print_size_of_model(old_model)
+    print("Model size after quantization: ")
+    print_size_of_model(model)
     print(model)
+    print("Starting to predict...")
 
     with profile(activities=[ProfilerActivity.CPU],
         profile_memory=True,
@@ -121,20 +150,16 @@ def test_model(args):
         prediction = model.predict(audio_feature, template, one_hot, args.optimize_last_layer)
     print(prof.key_averages(group_by_stack_n=5).table(sort_by="cpu_time_total", row_limit=20))
 
-    print("Time for prediction: {}".format(time.time()-start_time))
+    if args.calculate_mse:
+        print("Calculating MSE...")
+        non_quantized_prediction = old_model.predict(audio_feature, template, one_hot, args.optimize_last_layer)
+
+        mse = F.mse_loss(prediction, non_quantized_prediction)
+        print("MSE IS: ", mse)
     
     prediction = prediction.squeeze() # (seq_len, V*3)
     np.save(os.path.join(args.result_path, test_name), prediction.detach().cpu().numpy())
 
-
-def get_model(args):
-    if args.int8_quantization == "dynamic_int8":
-        return Faceformer(args)
-    elif args.int8_quantization == "static_int8":
-        return Faceformer(args, quantize_statically=True)
-    else:
-        return Faceformer(args)
-        
 def print_size_of_model(model):
     torch.save(model.state_dict(), "temp.p")
     print('Size (MB):', os.path.getsize("temp.p")/1e6)
@@ -293,6 +318,8 @@ def main():
     parser.add_argument("--int8_quantization", type=str, default="", help='')
     parser.add_argument("--optimize_last_layer", type=bool, default=False, help='Dont calculate linear layer for all')
     parser.add_argument("--set_seed", type=bool, default=False, help='')
+    parser.add_argument("--calculate_mse", type=bool, default=False, help='')
+    parser.add_argument('--static_quantized_layers', nargs='*', help='<Layers to quantize', default=[])
 
 
     args = parser.parse_args()   
