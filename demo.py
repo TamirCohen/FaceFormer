@@ -12,6 +12,9 @@ import torch.nn.functional as F
 from torch.ao.quantization import (
   QConfigMapping,
 )
+import bitsandbytes
+from bitsandbytes.utils import replace_linear
+from bitsandbytes.nn import Linear8bitLt
 import torch.quantization.quantize_fx as quantize_fx
 import copy
 import cv2
@@ -29,6 +32,25 @@ from torch.profiler import profile, record_function, ProfilerActivity
 #     Pn = torch.norm(x-y)
 #     return 20*torch.log10(Ps/Pn)
 
+
+import torch.nn as nn
+from accelerate import init_empty_weights
+
+def replace_8bit_linear(model, threshold=6.0, module_to_not_convert="lm_head"):
+    for name, module in model.named_children():
+        if len(list(module.children())) > 0:
+            replace_8bit_linear(module, threshold, module_to_not_convert)
+
+        if isinstance(module, nn.Linear) and name != module_to_not_convert:
+            model._modules[name] = bitsandbytes.nn.Linear8bitLt(
+                module.in_features,
+                module.out_features,
+                module.bias is not None,
+                has_fp16_weights=False,
+                threshold=threshold,
+            )
+    return model
+
 @torch.no_grad()
 def test_model(args):
     if not os.path.exists(args.result_path):
@@ -42,7 +64,13 @@ def test_model(args):
         print("Setting seed to 42...")
     #build model
     model = Faceformer(args)
-    model.load_state_dict(torch.load(os.path.join(args.dataset, '{}.pth'.format(args.model_name)),  map_location=torch.device(args.device)))
+    if args.int8_quantization == "llm_int8":
+        model = replace_8bit_linear(model)
+        model.load_state_dict(torch.load(os.path.join(args.dataset, '{}.pth'.format(args.model_name)),  map_location=torch.device(args.device)))
+        model = model.to(0)
+
+    else:
+        model.load_state_dict(torch.load(os.path.join(args.dataset, '{}.pth'.format(args.model_name)),  map_location=torch.device(args.device)))
     model = model.to(torch.device(args.device))
     model.eval()
     old_model = copy.deepcopy(model)
@@ -75,7 +103,6 @@ def test_model(args):
 
 
     print("Starting to predict...")
-    start_time = time.time()
     #TODO consider using intel ipex...
     if args.int8_quantization == "static_int8":
         # normed_conv_model = model.audio_encoder.encoder.pos_conv_embed.conv
