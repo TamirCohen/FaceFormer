@@ -36,12 +36,12 @@ from torch.profiler import profile, record_function, ProfilerActivity
 import torch.nn as nn
 from accelerate import init_empty_weights
 
-def replace_8bit_linear(model, threshold=6.0, module_to_not_convert="lm_head"):
+def replace_8bit_linear(model, module_to_not_convert, threshold=6.0):
+    """ This function is used for the LLMint8 quantization. It replaces all the linear layers with the 8bit linear layers."""
     for name, module in model.named_children():
-        if len(list(module.children())) > 0:
-            replace_8bit_linear(module, threshold, module_to_not_convert)
-
-        if isinstance(module, nn.Linear) and name != module_to_not_convert:
+        if len(list(module.children())) > 0 and not name in module_to_not_convert:
+            replace_8bit_linear(module, threshold=threshold, module_to_not_convert=module_to_not_convert)
+        if isinstance(module, nn.Linear) and not name in module_to_not_convert:
             model._modules[name] = bitsandbytes.nn.Linear8bitLt(
                 module.in_features,
                 module.out_features,
@@ -65,15 +65,24 @@ def test_model(args):
     #build model
     model = Faceformer(args)
     if args.int8_quantization == "llm_int8":
-        model = replace_8bit_linear(model)
+        model = replace_8bit_linear(model, module_to_not_convert=["transformer_decoder"])
         model.load_state_dict(torch.load(os.path.join(args.dataset, '{}.pth'.format(args.model_name)),  map_location=torch.device(args.device)))
+        model.half()
         model = model.to(0)
+    elif args.int8_quantization == "float16":
+        model.load_state_dict(torch.load(os.path.join(args.dataset, '{}.pth'.format(args.model_name)),  map_location=torch.device(args.device)))
+        model.half()
 
     else:
         model.load_state_dict(torch.load(os.path.join(args.dataset, '{}.pth'.format(args.model_name)),  map_location=torch.device(args.device)))
     model = model.to(torch.device(args.device))
     model.eval()
-    old_model = copy.deepcopy(model)
+    
+    # Generate old model
+    old_model = Faceformer(args)
+    old_model.load_state_dict(torch.load(os.path.join(args.dataset, '{}.pth'.format(args.model_name)),  map_location=torch.device(args.device)))
+    old_model = old_model.to(torch.device(args.device))
+    old_model.eval()
 
     template_file = os.path.join(args.dataset, args.template_path)
     with open(template_file, 'rb') as fin:
@@ -161,15 +170,26 @@ def test_model(args):
     print_size_of_model(model)
     print(model)
     print("Starting to predict...")
-
-    with profile(activities=[ProfilerActivity.CPU],
+    activities=[ProfilerActivity.CPU]
+    sort_by = "cpu_time_total"
+    if args.device == "cuda":
+        activities.append(ProfilerActivity.CUDA)
+        sort_by = "cuda_time_total"
+    
+    with profile(activities=activities,
         profile_memory=True,
         record_shapes=True,
         with_stack=True,
         experimental_config=torch._C._profiler._ExperimentalConfig(verbose=True),
         on_trace_ready=torch.profiler.tensorboard_trace_handler(f'./logs/faceformer_{args.int8_quantization}')) as prof:
-        prediction = model.predict(audio_feature, template, one_hot, args.optimize_last_layer)
-    print(prof.key_averages(group_by_stack_n=5).table(sort_by="cpu_time_total", row_limit=20))
+
+        if args.int8_quantization == "llm_int8" or args.int8_quantization == "float16":
+            model.biased_mask = model.biased_mask.half()
+            prediction = model.predict(audio_feature.half(), template.half(), one_hot.half(), args.optimize_last_layer)
+        else:
+            prediction = model.predict(audio_feature, template, one_hot, args.optimize_last_layer)
+
+    print(prof.key_averages(group_by_stack_n=5).table(sort_by=sort_by, row_limit=20))
 
     if args.calculate_mse:
         print("Calculating MSE...")
