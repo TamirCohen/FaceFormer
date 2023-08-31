@@ -108,6 +108,7 @@ def test(args, model, test_loader,epoch):
             one_hot = one_hot_all[:,iter,:]
             prediction = model.predict(audio, template, one_hot)
             prediction = prediction.squeeze() # (seq_len, V*3)
+            breakpoint()
             loss = torch.mean((prediction - vertice)**2)
             test_loss_log.append(loss.item())
             np.save(os.path.join(result_path, file_name[0].split(".")[0]+"_condition_"+condition_subject+".npy"), prediction.detach().cpu().numpy())
@@ -117,6 +118,7 @@ def test(args, model, test_loader,epoch):
                 one_hot = one_hot_all[:,iter,:]
                 prediction = model.predict(audio, template, one_hot)
                 prediction = prediction.squeeze() # (seq_len, V*3)
+                breakpoint()
                 loss = torch.mean((prediction - vertice)**2)
                 test_loss_log.append(loss.item())
                 np.save(os.path.join(result_path, file_name[0].split(".")[0]+"_condition_"+condition_subject+".npy"), prediction.detach().cpu().numpy())
