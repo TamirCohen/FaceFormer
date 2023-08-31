@@ -84,6 +84,13 @@ def test(args, model, test_loader,epoch):
     print ("Load the model...")
     print(os.path.join(save_path, '{}_model.pth'.format(epoch)))
     model.load_state_dict(torch.load(os.path.join(save_path, '{}_model.pth'.format(epoch))))
+    # print OK if the model is loaded successfully
+    if os.path.exists(os.path.join(save_path, '{}_model.pth'.format(epoch))):
+        print ("model loaded successfully")
+    else:
+        print ("model loaded failed")
+
+    # to cuda
     model = model.to(torch.device("cuda"))
     model.eval()
    
