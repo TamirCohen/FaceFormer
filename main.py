@@ -70,7 +70,7 @@ def trainer(args, train_loader, dev_loader, model, optimizer, criterion, epoch=1
     return model
 
 @torch.no_grad()
-def test(args, model, test_loader,epoch):
+def test(args, model, test_loader,epoch, criterion):
     
     print ("Create the result folder...")
     result_path = os.path.join(args.dataset,args.result_path)
@@ -107,19 +107,25 @@ def test(args, model, test_loader,epoch):
             iter = train_subjects_list.index(condition_subject)
             one_hot = one_hot_all[:,iter,:]
             prediction = model.predict(audio, template, one_hot)
-            prediction = prediction.squeeze() # (seq_len, V*3)
+            
             breakpoint()
-            loss = torch.mean((prediction - vertice)**2)
+            loss = criterion(prediction, vertice)
             test_loss_log.append(loss.item())
+
+            prediction = prediction.squeeze() # (seq_len, V*3)
+            
             np.save(os.path.join(result_path, file_name[0].split(".")[0]+"_condition_"+condition_subject+".npy"), prediction.detach().cpu().numpy())
         else:
             for iter in range(one_hot_all.shape[-1]):
                 condition_subject = train_subjects_list[iter]
                 one_hot = one_hot_all[:,iter,:]
                 prediction = model.predict(audio, template, one_hot)
-                prediction = prediction.squeeze() # (seq_len, V*3)
+
                 breakpoint()
-                loss = torch.mean((prediction - vertice)**2)
+                loss = criterion(prediction, vertice)
+                test_loss_log.append(loss.item())
+
+                prediction = prediction.squeeze() # (seq_len, V*3)
                 test_loss_log.append(loss.item())
                 np.save(os.path.join(result_path, file_name[0].split(".")[0]+"_condition_"+condition_subject+".npy"), prediction.detach().cpu().numpy())
     
