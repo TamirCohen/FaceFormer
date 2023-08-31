@@ -107,7 +107,7 @@ def test(args, model, test_loader,epoch, criterion):
             iter = train_subjects_list.index(condition_subject)
             one_hot = one_hot_all[:,iter,:]
             prediction = model.predict(audio, template, one_hot)
-            
+
             breakpoint()
             loss = criterion(prediction, vertice)
             test_loss_log.append(loss.item())
@@ -181,7 +181,7 @@ def main():
     else:
         print ("Only test the model...")
 
-    test(args, model, dataset["test"], epoch=args.max_epoch)
+    test(args, model, dataset["test"], epoch=args.max_epoch, criterion = criterion)
     
 if __name__=="__main__":
     main()
