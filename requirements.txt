@@ -1,7 +1,7 @@
 torch
 torchvision
 torchaudio
-#transformers==4.6.1 
+#transformers==4.6.1 # 4.6.1 is the last version that works with python 3.6
 numpy
 scipy
 librosa
