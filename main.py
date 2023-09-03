@@ -108,7 +108,7 @@ def test(args, model, test_loader,epoch, criterion):
             one_hot = one_hot_all[:,iter,:]
             prediction = model.predict(audio, template, one_hot)
 
-            breakpoint()
+            #breakpoint()
             loss = criterion(prediction, vertice[:,1:128,:])
             test_loss_log.append(loss.item())
 
@@ -121,7 +121,7 @@ def test(args, model, test_loader,epoch, criterion):
                 one_hot = one_hot_all[:,iter,:]
                 prediction = model.predict(audio, template, one_hot)
 
-                breakpoint()
+                #breakpoint()
                 loss = criterion(prediction, vertice[:,1:128,:])
                 test_loss_log.append(loss.item())
 
