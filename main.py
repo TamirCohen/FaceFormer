@@ -109,11 +109,11 @@ def test(args, model, test_loader,epoch, criterion):
             prediction = model.predict(audio, template, one_hot)
 
             #breakpoint()
-            #loss = criterion(prediction, vertice[:,1:128,:])
+            loss = criterion(prediction, vertice[:,1:prediction.shape[1]+1,:])
             #print("shapes:", prediction.shape, vertice.shape)
-            sum = torch.sum((prediction - vertice[:,1:prediction.shape[1]+1,:])**2)
-            sqrt = torch.sqrt(sum)
-            loss = torch.mean(sqrt)
+            #sum = torch.sum((prediction - vertice[:,1:prediction.shape[1]+1,:])**2)
+            #sqrt = torch.sqrt(sum)
+            #loss = torch.mean(sqrt)
             #loss = torch.mean(torch.sqrt(torch.sum((prediction - vertice[:,1:128,:])**2, dim = -1)))
             test_loss_log.append(loss.item())
 
@@ -127,11 +127,11 @@ def test(args, model, test_loader,epoch, criterion):
                 prediction = model.predict(audio, template, one_hot)
 
                 #breakpoint()
-                #loss = criterion(prediction, vertice[:,1:128,:])
+                loss = criterion(prediction, vertice[:,1:prediction.shape[1]+1,:])
                 #print("shapes:", prediction.shape, vertice.shape)
-                sum = torch.sum((prediction - vertice[:,1:prediction.shape[1]+1,:])**2)
-                sqrt = torch.sqrt(sum)
-                loss = torch.mean(sqrt)
+                #sum = torch.sum((prediction - vertice[:,1:prediction.shape[1]+1,:])**2)
+                #sqrt = torch.sqrt(sum)
+                #loss = torch.mean(sqrt)
                 #loss = torch.mean(torch.sqrt(torch.sum((prediction - vertice[:,1:128,:])**2, dim=-1)))
                 test_loss_log.append(loss.item())
 
