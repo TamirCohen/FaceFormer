@@ -110,9 +110,9 @@ def test(args, model, test_loader,epoch, criterion):
 
             #breakpoint()
             #loss = criterion(prediction, vertice[:,1:128,:])
-            sum = torch.sum((prediction - vertice[:,1:128,:])**2, dim = -1)
-            sqrt = torch.sqrt(sum)
-            loss = torch.mean(sqrt)
+            sum = torch.sum((prediction - vertice[:,1:128,:])**2, dim = 3)
+            sqrt = torch.sqrt(sum,dim = 2)
+            loss = torch.mean(sqrt, dim = 1)
             #loss = torch.mean(torch.sqrt(torch.sum((prediction - vertice[:,1:128,:])**2, dim = -1)))
             test_loss_log.append(loss.item())
 
@@ -127,9 +127,9 @@ def test(args, model, test_loader,epoch, criterion):
 
                 #breakpoint()
                 #loss = criterion(prediction, vertice[:,1:128,:])
-                sum = torch.sum((prediction - vertice[:,1:128,:])**2, dim = -1)
-                sqrt = torch.sqrt(sum)
-                loss = torch.mean(sqrt)
+                sum = torch.sum((prediction - vertice[:,1:128,:])**2, dim = 3)
+                sqrt = torch.sqrt(sum, dim = 2)
+                loss = torch.mean(sqrt, dim = 1)
                 #loss = torch.mean(torch.sqrt(torch.sum((prediction - vertice[:,1:128,:])**2, dim=-1)))
                 test_loss_log.append(loss.item())
 
