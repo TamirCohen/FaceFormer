@@ -51,8 +51,11 @@ def replace_8bit_linear(model, module_to_not_convert, threshold=6.0):
             )
     return model
 
+def get_model(args):
+    return test_model(args, should_test=False)
+
 @torch.no_grad()
-def test_model(args):
+def test_model(args, should_test=True):
     if not os.path.exists(args.result_path):
         os.makedirs(args.result_path)
 
@@ -163,6 +166,9 @@ def test_model(args):
             model,  # the original model
             {torch.nn.Linear},  # a set of layers to dynamically quantize
             dtype=torch.qint8)  # the target dtype for quantized weights
+
+    if not should_test:
+        return model
 
     print("Model size before quantization: ")
     print_size_of_model(old_model)
