@@ -108,12 +108,9 @@ def test(args, model, test_loader,epoch, criterion):
             one_hot = one_hot_all[:,iter,:]
             prediction = model.predict(audio, template, one_hot)
 
-
-            loss = criterion(prediction, vertice[:,0:prediction.shape[1],:])
             #print("shapes:", prediction.shape, vertice.shape)
-            #sum = torch.sum((prediction - vertice[:,1:prediction.shape[1]+1,:])**2)
-            #sqrt = torch.sqrt(sum)
-            #loss = torch.mean(sqrt)
+            loss = criterion(prediction, vertice[:,1:prediction.shape[1]+1,:])
+
             test_loss_log.append(loss.item())
             print ("test loss: ", loss.item())
             prediction = prediction.squeeze() # (seq_len, V*3)
@@ -125,12 +122,8 @@ def test(args, model, test_loader,epoch, criterion):
                 one_hot = one_hot_all[:,iter,:]
                 prediction = model.predict(audio, template, one_hot)
 
-
-                loss = criterion(prediction, vertice[:,0:prediction.shape[1],:])
                 #print("shapes:", prediction.shape, vertice.shape)
-                #sum = torch.sum((prediction - vertice[:,1:prediction.shape[1]+1,:])**2)
-                #sqrt = torch.sqrt(sum)
-                #loss = torch.mean(sqrt)
+                loss = criterion(prediction, vertice[:,1:prediction.shape[1]+1,:])
 
                 print ("test loss: ", loss.item())
                 prediction = prediction.squeeze() # (seq_len, V*3)
