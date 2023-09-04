@@ -109,13 +109,13 @@ def test(args, model, test_loader,epoch, criterion):
             prediction = model.predict(audio, template, one_hot)
 
             #breakpoint()
-            #loss = criterion(prediction, vertice[:,1:prediction.shape[1]+1,:])
+            loss = criterion(prediction, vertice[:,1:prediction.shape[1]+1,:])
             #print("shapes:", prediction.shape, vertice.shape)
-            sum = torch.sum((prediction - vertice[:,1:prediction.shape[1]+1,:])**2)
-            sqrt = torch.sqrt(sum)
-            loss = torch.mean(sqrt)
+            #sum = torch.sum((prediction - vertice[:,1:prediction.shape[1]+1,:])**2)
+            #sqrt = torch.sqrt(sum)
+            #loss = torch.mean(sqrt)
             test_loss_log.append(loss.item())
-
+            print ("test loss: ", loss.item())
             prediction = prediction.squeeze() # (seq_len, V*3)
             
             np.save(os.path.join(result_path, file_name[0].split(".")[0]+"_condition_"+condition_subject+".npy"), prediction.detach().cpu().numpy())
@@ -126,18 +126,18 @@ def test(args, model, test_loader,epoch, criterion):
                 prediction = model.predict(audio, template, one_hot)
 
                 #breakpoint()
-                #loss = criterion(prediction, vertice[:,1:prediction.shape[1]+1,:])
+                loss = criterion(prediction, vertice[:,1:prediction.shape[1]+1,:])
                 #print("shapes:", prediction.shape, vertice.shape)
-                sum = torch.sum((prediction - vertice[:,1:prediction.shape[1]+1,:])**2)
-                sqrt = torch.sqrt(sum)
-                loss = torch.mean(sqrt)
-                test_loss_log.append(loss.item())
+                #sum = torch.sum((prediction - vertice[:,1:prediction.shape[1]+1,:])**2)
+                #sqrt = torch.sqrt(sum)
+                #loss = torch.mean(sqrt)
 
+                print ("test loss: ", loss.item())
                 prediction = prediction.squeeze() # (seq_len, V*3)
                 test_loss_log.append(loss.item())
                 np.save(os.path.join(result_path, file_name[0].split(".")[0]+"_condition_"+condition_subject+".npy"), prediction.detach().cpu().numpy())
     
-    print ("test loss: ", np.mean(test_loss_log))
+    print ("mean test loss: ", np.mean(test_loss_log))
     np.save(os.path.join(result_path, "test_loss.npy"), np.mean(test_loss_log))    
 
 def count_parameters(model):
