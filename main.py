@@ -11,6 +11,7 @@ import torch.nn.functional as F
 
 from data_loader import get_dataloaders
 from faceformer import Faceformer
+import tensorrt
 
 def trainer(args, train_loader, dev_loader, model, optimizer, criterion, epoch=100):
     print ("Create the save folder...")
@@ -161,6 +162,12 @@ def main():
        " FaceTalk_170731_00024_TA")
     parser.add_argument("--onlyTestFlag", type=bool, default=False)
     args = parser.parse_args()
+
+    # print tesnorrt version
+    print("tensorrt version: ", tensorrt.__version__)
+
+    # print cuda version
+    print("cuda version: ", torch.version.cuda)
 
     #build model
     model = Faceformer(args)
