@@ -108,8 +108,8 @@ def test(args, model, test_loader,epoch, criterion):
             one_hot = one_hot_all[:,iter,:]
             prediction = model.predict(audio, template, one_hot)
 
-            #breakpoint()
-            loss = criterion(prediction, vertice[:,1:prediction.shape[1]+1,:])
+
+            loss = criterion(prediction, vertice[:,0:prediction.shape[1],:])
             #print("shapes:", prediction.shape, vertice.shape)
             #sum = torch.sum((prediction - vertice[:,1:prediction.shape[1]+1,:])**2)
             #sqrt = torch.sqrt(sum)
@@ -125,8 +125,8 @@ def test(args, model, test_loader,epoch, criterion):
                 one_hot = one_hot_all[:,iter,:]
                 prediction = model.predict(audio, template, one_hot)
 
-                #breakpoint()
-                loss = criterion(prediction, vertice[:,1:prediction.shape[1]+1,:])
+
+                loss = criterion(prediction, vertice[:,0:prediction.shape[1],:])
                 #print("shapes:", prediction.shape, vertice.shape)
                 #sum = torch.sum((prediction - vertice[:,1:prediction.shape[1]+1,:])**2)
                 #sqrt = torch.sqrt(sum)
@@ -190,6 +190,7 @@ def main():
         print ("Only test the model...")
 
     test(args, model, dataset["test"], epoch=args.max_epoch, criterion = criterion)
+    print ("Finito!")
     
 if __name__=="__main__":
     main()
