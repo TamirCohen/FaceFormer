@@ -169,6 +169,9 @@ def main():
     # print cuda version
     print("cuda version: ", torch.version.cuda)
 
+    # print pytorch version
+    print("pytorch version: ", torch.__version__)
+
     #build model
     model = Faceformer(args)
     print("model parameters: ", count_parameters(model))
