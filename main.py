@@ -159,6 +159,12 @@ def main():
     parser.add_argument("--test_subjects", type=str, default="FaceTalk_170809_00138_TA"
        " FaceTalk_170731_00024_TA")
     parser.add_argument("--onlyTestFlag", type=bool, default=False)
+    parser.add_argument("--int8_quantization", type=str, default="", help='')
+    parser.add_argument("--optimize_last_layer", type=bool, default=False, help='Dont calculate linear layer for all')
+    parser.add_argument("--set_seed", type=bool, default=False, help='')
+    parser.add_argument("--calculate_mse", type=bool, default=False, help='')
+    parser.add_argument('--static_quantized_layers', nargs='*', help='<Layers to quantize', default=[])
+
     args = parser.parse_args()
 
     # print tesnorrt version
