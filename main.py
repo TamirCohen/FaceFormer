@@ -109,7 +109,7 @@ def test(args, model, test_loader,epoch, criterion):
 
             #print("shapes:", prediction.shape, vertice.shape)
             if (args.only_noise):
-                original_vertice = vertice.unsqueeze(1).repeat(1, vertice.shape[1], 1)
+                original_vertice = vertice[:,0,:].unsqueeze(1).repeat(1, vertice.shape[1], 1)
             else:
                 original_vertice = vertice[:,1:prediction.shape[1]+1,:]
             loss = criterion(prediction, original_vertice)
