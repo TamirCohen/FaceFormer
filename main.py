@@ -167,7 +167,6 @@ def main():
     parser.add_argument("--subject", type=str, default="M1", help='select a subject from test_subjects or train_subjects')
     parser.add_argument("--background_black", type=bool, default=True, help='whether to use black background')
     parser.add_argument("--calibration_wav_path", type=str, default="demo/wav/test.wav", help='path of the input audio signal')
-    parser.add_argument("--device", type=str, default="cuda")
 
     args = parser.parse_args()
 
