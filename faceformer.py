@@ -291,5 +291,6 @@ class Faceformer(nn.Module):
         if optimize_last_layer:
             vertice_out = torch.stack(all_vertices_out_list, dim=1)
         vertice_out = vertice_out + template
+        
         return vertice_out
 

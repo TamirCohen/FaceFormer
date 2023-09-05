@@ -11,13 +11,16 @@ import torch.nn.functional as F
 
 from data_loader import get_dataloaders
 from faceformer import Faceformer
+import tensorrt
 
 def trainer(args, train_loader, dev_loader, model, optimizer, criterion, epoch=100):
+    print ("Create the save folder...")
     save_path = os.path.join(args.dataset,args.save_path)
     if os.path.exists(save_path):
         shutil.rmtree(save_path)
     os.makedirs(save_path)
 
+    print ("Start training...")
     train_subjects_list = [i for i in args.train_subjects.split(" ")]
     iteration = 0
     for e in range(epoch+1):
@@ -68,7 +71,9 @@ def trainer(args, train_loader, dev_loader, model, optimizer, criterion, epoch=1
     return model
 
 @torch.no_grad()
-def test(args, model, test_loader,epoch):
+def test(args, model, test_loader,epoch, criterion):
+    
+    print ("Create the result folder...")
     result_path = os.path.join(args.dataset,args.result_path)
     if os.path.exists(result_path):
         shutil.rmtree(result_path)
@@ -77,10 +82,23 @@ def test(args, model, test_loader,epoch):
     save_path = os.path.join(args.dataset,args.save_path)
     train_subjects_list = [i for i in args.train_subjects.split(" ")]
 
+    print ("Load the model...")
+    print(os.path.join(save_path, '{}_model.pth'.format(epoch)))
     model.load_state_dict(torch.load(os.path.join(save_path, '{}_model.pth'.format(epoch))))
+    # print OK if the model is loaded successfully
+    if os.path.exists(os.path.join(save_path, '{}_model.pth'.format(epoch))):
+        print ("model loaded successfully")
+    else:
+        print ("model loaded failed")
+
+    # to cuda
     model = model.to(torch.device("cuda"))
     model.eval()
    
+    print ("Start testing...")
+    test_subjects_list = [i for i in args.test_subjects.split(" ")]
+    test_loss_log = []
+
     for audio, vertice, template, one_hot_all, file_name in test_loader:
         # to gpu
         audio, vertice, template, one_hot_all= audio.to(device="cuda"), vertice.to(device="cuda"), template.to(device="cuda"), one_hot_all.to(device="cuda")
@@ -90,16 +108,32 @@ def test(args, model, test_loader,epoch):
             iter = train_subjects_list.index(condition_subject)
             one_hot = one_hot_all[:,iter,:]
             prediction = model.predict(audio, template, one_hot)
+
+            #print("shapes:", prediction.shape, vertice.shape)
+            loss = criterion(prediction, vertice[:,1:prediction.shape[1]+1,:])
+
+            test_loss_log.append(loss.item())
+            print ("test loss: ", loss.item())
             prediction = prediction.squeeze() # (seq_len, V*3)
+            
             np.save(os.path.join(result_path, file_name[0].split(".")[0]+"_condition_"+condition_subject+".npy"), prediction.detach().cpu().numpy())
         else:
             for iter in range(one_hot_all.shape[-1]):
                 condition_subject = train_subjects_list[iter]
                 one_hot = one_hot_all[:,iter,:]
                 prediction = model.predict(audio, template, one_hot)
+
+                #print("shapes:", prediction.shape, vertice.shape)
+                loss = criterion(prediction, vertice[:,1:prediction.shape[1]+1,:])
+
+                print ("test loss: ", loss.item())
                 prediction = prediction.squeeze() # (seq_len, V*3)
+                test_loss_log.append(loss.item())
                 np.save(os.path.join(result_path, file_name[0].split(".")[0]+"_condition_"+condition_subject+".npy"), prediction.detach().cpu().numpy())
-         
+    
+    print ("mean test loss: ", np.mean(test_loss_log))
+    np.save(os.path.join(result_path, "test_loss.npy"), np.mean(test_loss_log))    
+
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
@@ -126,7 +160,17 @@ def main():
        " FaceTalk_170908_03277_TA")
     parser.add_argument("--test_subjects", type=str, default="FaceTalk_170809_00138_TA"
        " FaceTalk_170731_00024_TA")
+    parser.add_argument("--onlyTestFlag", type=bool, default=False)
     args = parser.parse_args()
+
+    # print tesnorrt version
+    print("tensorrt version: ", tensorrt.__version__)
+
+    # print cuda version
+    print("cuda version: ", torch.version.cuda)
+
+    # print pytorch version
+    print("pytorch version: ", torch.__version__)
 
     #build model
     model = Faceformer(args)
@@ -141,11 +185,15 @@ def main():
     # loss
     criterion = nn.MSELoss()
 
-    # Train the model
-    optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad,model.parameters()), lr=args.lr)
-    model = trainer(args, dataset["train"], dataset["valid"],model, optimizer, criterion, epoch=args.max_epoch)
-    
-    test(args, model, dataset["test"], epoch=args.max_epoch)
+    if (args.onlyTestFlag == False):
+        # Train the model
+        optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad,model.parameters()), lr=args.lr)
+        model = trainer(args, dataset["train"], dataset["valid"],model, optimizer, criterion, epoch=args.max_epoch)
+    else:
+        print ("Only test the model...")
+
+    test(args, model, dataset["test"], epoch=args.max_epoch, criterion = criterion)
+    print ("Finito!")
     
 if __name__=="__main__":
     main()
