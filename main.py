@@ -108,7 +108,11 @@ def test(args, model, test_loader,epoch, criterion):
             prediction = model.predict(audio, template, one_hot)
 
             #print("shapes:", prediction.shape, vertice.shape)
-            loss = criterion(prediction, vertice[:,1:prediction.shape[1]+1,:])
+            if (args.only_noise):
+                original_vertice = vertice.unsqueeze(1).repeat(1, vertice.shape[1], 1)
+            else:
+                original_vertice = vertice[:,1:prediction.shape[1]+1,:]
+            loss = criterion(prediction, original_vertice)
 
             test_loss_log.append(loss.item())
             print ("test loss: ", loss.item())
@@ -167,6 +171,7 @@ def main():
     parser.add_argument("--subject", type=str, default="M1", help='select a subject from test_subjects or train_subjects')
     parser.add_argument("--background_black", type=bool, default=True, help='whether to use black background')
     parser.add_argument("--calibration_wav_path", type=str, default="demo/wav/test.wav", help='path of the input audio signal')
+    parser.add_argument("--only_noise", type=bool, default=False)
 
     args = parser.parse_args()
 
