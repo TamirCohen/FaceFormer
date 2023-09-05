@@ -87,7 +87,7 @@ def test_model(args, model_path, should_test=True):
     old_model = old_model.to(torch.device(args.device))
     old_model.eval()
 
-    template_file = os.path.join(args.dataset, args.template_path)
+    template_file = os.path.join(args.dataset, args.template_file)
     with open(template_file, 'rb') as fin:
         templates = pickle.load(fin,encoding='latin1')
 
@@ -360,7 +360,7 @@ def main():
     parser.add_argument("--condition", type=str, default="M3", help='select a conditioning subject from train_subjects')
     parser.add_argument("--subject", type=str, default="M1", help='select a subject from test_subjects or train_subjects')
     parser.add_argument("--background_black", type=bool, default=True, help='whether to use black background')
-    parser.add_argument("--template_path", type=str, default="templates.pkl", help='path of the personalized templates')
+    parser.add_argument("--template_file", type=str, default="templates.pkl", help='path of the personalized templates')
     parser.add_argument("--render_template_path", type=str, default="templates", help='path of the mesh in BIWI/FLAME topology')
     parser.add_argument("--int8_quantization", type=str, default="", help='')
     parser.add_argument("--optimize_last_layer", type=bool, default=False, help='Dont calculate linear layer for all')
