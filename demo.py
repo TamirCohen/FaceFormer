@@ -105,9 +105,9 @@ def test_model(args, model_path, should_test=True):
     template = np.reshape(template,(-1,template.shape[0]))
     template = torch.FloatTensor(template).to(device=args.device)
 
-    wav_path = args.wav_path
-    test_name = os.path.basename(wav_path).split(".")[0]
-    speech_array, sampling_rate = librosa.load(os.path.join(wav_path), sr=16000)
+    calibration_wav_path = args.calibration_wav_path
+    test_name = os.path.basename(calibration_wav_path).split(".")[0]
+    speech_array, sampling_rate = librosa.load(os.path.join(calibration_wav_path), sr=16000)
     processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base-960h")
     audio_feature = np.squeeze(processor(speech_array,sampling_rate=16000).input_values)
     audio_feature = np.reshape(audio_feature,(-1,audio_feature.shape[0]))
@@ -305,8 +305,8 @@ def render_mesh_helper(args,mesh, t_center, rot=np.zeros(3), tex_img=None, z_off
     return color[..., ::-1]
 
 def render_sequence(args):
-    wav_path = args.wav_path
-    test_name = os.path.basename(wav_path).split(".")[0]
+    calibration_wav_path = args.calibration_wav_path
+    test_name = os.path.basename(calibration_wav_path).split(".")[0]
     predicted_vertices_path = os.path.join(args.result_path,test_name+".npy")
     if args.dataset == "BIWI":
         template_file = os.path.join(args.dataset, args.render_template_path, "BIWI.ply")
@@ -355,7 +355,7 @@ def main():
     parser.add_argument("--train_subjects", type=str, default="F2 F3 F4 M3 M4 M5")
     parser.add_argument("--test_subjects", type=str, default="F1 F5 F6 F7 F8 M1 M2 M6")
     parser.add_argument("--output_path", type=str, default="demo/output", help='path of the rendered video sequence')
-    parser.add_argument("--wav_path", type=str, default="demo/wav/test.wav", help='path of the input audio signal')
+    parser.add_argument("--calibration_wav_path", type=str, default="demo/wav/test.wav", help='path of the input audio signal')
     parser.add_argument("--result_path", type=str, default="demo/result", help='path of the predictions')
     parser.add_argument("--condition", type=str, default="M3", help='select a conditioning subject from train_subjects')
     parser.add_argument("--subject", type=str, default="M1", help='select a subject from test_subjects or train_subjects')
