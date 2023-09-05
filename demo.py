@@ -189,11 +189,7 @@ def test_model(args, model_path, should_test=True):
         experimental_config=torch._C._profiler._ExperimentalConfig(verbose=True),
         on_trace_ready=torch.profiler.tensorboard_trace_handler(f'./logs/faceformer_{args.int8_quantization}')) as prof:
 
-        if args.int8_quantization == "llm_int8" or args.int8_quantization == "float16":
-            model.biased_mask = model.biased_mask.half()
-            prediction = model.predict(audio_feature.half(), template.half(), one_hot.half(), args.optimize_last_layer)
-        else:
-            prediction = model.predict(audio_feature, template, one_hot, args.optimize_last_layer)
+        prediction = model.predict(audio_feature, template, one_hot, args.optimize_last_layer)
 
     print(prof.key_averages(group_by_stack_n=5).table(sort_by=sort_by, row_limit=20))
 

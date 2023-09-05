@@ -129,6 +129,8 @@ class Faceformer(nn.Module):
         # temporal bias
 
         self.biased_mask = init_biased_mask(n_head = 4, max_seq_len = 600, period=args.period)
+        if args.int8_quantization == "llm_int8" or args.int8_quantization == "float16":
+            self.biased_mask = self.biased_mask.half()
         decoder_layer = nn.TransformerDecoderLayer(d_model=args.feature_dim, nhead=4, dim_feedforward=2*args.feature_dim, batch_first=True)        
         #TODO quantizise the decoder, super improtant!
         decoder_layer.forward = types.MethodType(quantize_decoder_forward, decoder_layer)
@@ -207,6 +209,11 @@ class Faceformer(nn.Module):
         return loss
 
     def predict(self, audio, template, one_hot, optimize_last_layer=False):
+        if self.args.int8_quantization == "llm_int8" or self.args.int8_quantization == "float16":
+            audio = audio.half()
+            template = template.half()
+            one_hot = one_hot.half()
+        
         template = template.unsqueeze(1) # (1,1, V*3)
 
         # if self.quantize_statically:
