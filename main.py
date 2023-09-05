@@ -96,7 +96,8 @@ def test(args, model, test_loader,epoch, criterion):
     print ("Start testing...")
     test_subjects_list = [i for i in args.test_subjects.split(" ")]
     test_loss_log = []
-
+    if (args.only_noise):
+        print("comparing to pur noise")
     for audio, vertice, template, one_hot_all, file_name in test_loader:
         # to gpu
         audio, vertice, template, one_hot_all= audio.to(device=args.device), vertice.to(device=args.device), template.to(device=args.device), one_hot_all.to(device=args.device)
@@ -108,10 +109,10 @@ def test(args, model, test_loader,epoch, criterion):
             prediction = model.predict(audio, template, one_hot)
 
             #print("shapes:", prediction.shape, vertice.shape)
+            original_vertice = vertice[:,1:prediction.shape[1]+1,:]
             if (args.only_noise):
-                original_vertice = vertice[:,0,:].unsqueeze(1).repeat(1, vertice.shape[1], 1)
-            else:
-                original_vertice = vertice[:,1:prediction.shape[1]+1,:]
+                original_vertice = original_vertice[:,0,:].unsqueeze(1).repeat(1, original_vertice.shape[1], 1)
+
             loss = criterion(prediction, original_vertice)
 
             test_loss_log.append(loss.item())
