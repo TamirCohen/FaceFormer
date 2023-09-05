@@ -13,3 +13,5 @@ transformers
 trimesh
 pyrender
 opencv-python
+accelerate
+bitsandbytes
