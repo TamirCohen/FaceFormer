@@ -163,6 +163,9 @@ def main():
     parser.add_argument("--optimize_last_layer", type=bool, default=False, help='Dont calculate linear layer for all')
     parser.add_argument("--set_seed", type=bool, default=False, help='')
     parser.add_argument('--static_quantized_layers', nargs='*', help='<Layers to quantize', default=[])
+    parser.add_argument("--condition", type=str, default="M3", help='select a conditioning subject from train_subjects')
+    parser.add_argument("--subject", type=str, default="M1", help='select a subject from test_subjects or train_subjects')
+    parser.add_argument("--background_black", type=bool, default=True, help='whether to use black background')
 
     args = parser.parse_args()
 
