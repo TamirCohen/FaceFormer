@@ -33,7 +33,7 @@ def trainer(args, train_loader, dev_loader, model, optimizer, criterion, epoch=1
         for i, (audio, vertice, template, one_hot, file_name) in pbar:
             iteration += 1
             # to gpu
-            audio, vertice, template, one_hot  = audio.to(device="cuda"), vertice.to(device="cuda"), template.to(device="cuda"), one_hot.to(device="cuda")
+            audio, vertice, template, one_hot  = audio.to(device=args.device), vertice.to(device=args.device), template.to(device=args.device), one_hot.to(device=args.device)
             loss = model(audio, template,  vertice, one_hot, criterion,teacher_forcing=False)
             loss.backward()
             loss_log.append(loss.item())
@@ -47,7 +47,7 @@ def trainer(args, train_loader, dev_loader, model, optimizer, criterion, epoch=1
         model.eval()
         for audio, vertice, template, one_hot_all,file_name in dev_loader:
             # to gpu
-            audio, vertice, template, one_hot_all= audio.to(device="cuda"), vertice.to(device="cuda"), template.to(device="cuda"), one_hot_all.to(device="cuda")
+            audio, vertice, template, one_hot_all= audio.to(device=args.device), vertice.to(device=args.device), template.to(device=args.device), one_hot_all.to(device=args.device)
             train_subject = "_".join(file_name[0].split("_")[:-1])
             if train_subject in train_subjects_list:
                 condition_subject = train_subject
@@ -90,7 +90,7 @@ def test(args, model, test_loader,epoch, criterion):
         print ("model loaded failed")
 
     # to cuda
-    model = model.to(torch.device("cuda"))
+    model = model.to(torch.device(args.device))
     model.eval()
    
     print ("Start testing...")
@@ -99,7 +99,7 @@ def test(args, model, test_loader,epoch, criterion):
 
     for audio, vertice, template, one_hot_all, file_name in test_loader:
         # to gpu
-        audio, vertice, template, one_hot_all= audio.to(device="cuda"), vertice.to(device="cuda"), template.to(device="cuda"), one_hot_all.to(device="cuda")
+        audio, vertice, template, one_hot_all= audio.to(device=args.device), vertice.to(device=args.device), template.to(device=args.device), one_hot_all.to(device=args.device)
         train_subject = "_".join(file_name[0].split("_")[:-1])
         if train_subject in train_subjects_list:
             condition_subject = train_subject
@@ -167,6 +167,7 @@ def main():
     parser.add_argument("--subject", type=str, default="M1", help='select a subject from test_subjects or train_subjects')
     parser.add_argument("--background_black", type=bool, default=True, help='whether to use black background')
     parser.add_argument("--calibration_wav_path", type=str, default="demo/wav/test.wav", help='path of the input audio signal')
+    parser.add_argument("--device", type=str, default="cuda")
 
     args = parser.parse_args()
 
