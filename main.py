@@ -162,7 +162,6 @@ def main():
     parser.add_argument("--int8_quantization", type=str, default="", help='')
     parser.add_argument("--optimize_last_layer", type=bool, default=False, help='Dont calculate linear layer for all')
     parser.add_argument("--set_seed", type=bool, default=False, help='')
-    parser.add_argument("--calculate_mse", type=bool, default=False, help='')
     parser.add_argument('--static_quantized_layers', nargs='*', help='<Layers to quantize', default=[])
 
     args = parser.parse_args()
