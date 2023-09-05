@@ -4,7 +4,7 @@ import argparse
 from tqdm import tqdm
 import os, shutil
 import copy
-
+from demo import get_model
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -82,10 +82,8 @@ def test(args, model, test_loader,epoch, criterion):
     save_path = os.path.join(args.dataset,args.save_path)
     train_subjects_list = [i for i in args.train_subjects.split(" ")]
 
-    print ("Load the model...")
-    print(os.path.join(save_path, '{}_model.pth'.format(epoch)))
-    model.load_state_dict(torch.load(os.path.join(save_path, '{}_model.pth'.format(epoch))))
-    # print OK if the model is loaded successfully
+    print("Load the model...")
+    model = get_model(args, os.path.join(save_path, '{}_model.pth'.format(epoch)))
     if os.path.exists(os.path.join(save_path, '{}_model.pth'.format(epoch))):
         print ("model loaded successfully")
     else:

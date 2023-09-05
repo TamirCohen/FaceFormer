@@ -51,11 +51,11 @@ def replace_8bit_linear(model, module_to_not_convert, threshold=6.0):
             )
     return model
 
-def get_model(args):
-    return test_model(args, should_test=False)
+def get_model(args, model_path):
+    return test_model(args, model_path, should_test=False)
 
 @torch.no_grad()
-def test_model(args, should_test=True):
+def test_model(args, model_path, should_test=True):
     if not os.path.exists(args.result_path):
         os.makedirs(args.result_path)
 
@@ -69,21 +69,21 @@ def test_model(args, should_test=True):
     model = Faceformer(args)
     if args.int8_quantization == "llm_int8":
         model = replace_8bit_linear(model, module_to_not_convert=["transformer_decoder"])
-        model.load_state_dict(torch.load(os.path.join(args.dataset, '{}.pth'.format(args.model_name)),  map_location=torch.device(args.device)))
+        model.load_state_dict(torch.load(model_path,  map_location=torch.device(args.device)))
         model.half()
         model = model.to(0)
     elif args.int8_quantization == "float16":
-        model.load_state_dict(torch.load(os.path.join(args.dataset, '{}.pth'.format(args.model_name)),  map_location=torch.device(args.device)))
+        model.load_state_dict(torch.load(model_path,  map_location=torch.device(args.device)))
         model.half()
 
     else:
-        model.load_state_dict(torch.load(os.path.join(args.dataset, '{}.pth'.format(args.model_name)),  map_location=torch.device(args.device)))
+        model.load_state_dict(torch.load(model_path,  map_location=torch.device(args.device)))
     model = model.to(torch.device(args.device))
     model.eval()
     
     # Generate old model
     old_model = Faceformer(args)
-    old_model.load_state_dict(torch.load(os.path.join(args.dataset, '{}.pth'.format(args.model_name)),  map_location=torch.device(args.device)))
+    old_model.load_state_dict(torch.load(model_path,  map_location=torch.device(args.device)))
     old_model = old_model.to(torch.device(args.device))
     old_model.eval()
 
@@ -371,7 +371,7 @@ def main():
 
     args = parser.parse_args()   
 
-    test_model(args)
+    test_model(os.path.join(args.dataset, '{}.pth'.format(args.model_name)), args)
     render_sequence(args)
 
 if __name__=="__main__":
