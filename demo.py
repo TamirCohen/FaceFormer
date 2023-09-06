@@ -56,8 +56,12 @@ def get_model(args, model_path):
 
 @torch.no_grad()
 def test_model(args, model_path, should_test=True):
-    if not os.path.exists(args.result_path):
-        os.makedirs(args.result_path)
+
+    print ("Create the result folder...")
+    result_path = os.path.join(args.dataset,args.result_path)
+    if os.path.exists(result_path):
+        shutil.rmtree(result_path)
+    os.makedirs(result_path)
 
     if args.set_seed:
         torch.manual_seed(42)
@@ -363,6 +367,7 @@ def main():
     parser.add_argument("--set_seed", type=bool, default=False, help='')
     parser.add_argument("--calculate_mse", type=bool, default=False, help='')
     parser.add_argument('--static_quantized_layers', nargs='*', help='<Layers to quantize', default=[])
+    parser.add_argument("--result_path", type=str, default="result", help='path to the predictions')
 
 
     args = parser.parse_args()   
