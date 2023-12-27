@@ -352,7 +352,7 @@ def main():
     parser.add_argument("--test_subjects", type=str, default="F1 F5 F6 F7 F8 M1 M2 M6")
     parser.add_argument("--output_path", type=str, default="demo/output", help='path of the rendered video sequence')
     parser.add_argument("--calibration_wav_path", type=str, default="demo/wav/test.wav", help='path of the input audio signal')
-    parser.add_argument("--result_path", type=str, default="demo/result", help='path of the predictions')
+    parser.add_argument("--result_path", type=str, default="result", help='path of the predictions')
     parser.add_argument("--condition", type=str, default="M3", help='select a conditioning subject from train_subjects')
     parser.add_argument("--subject", type=str, default="M1", help='select a subject from test_subjects or train_subjects')
     parser.add_argument("--background_black", type=bool, default=True, help='whether to use black background')
@@ -363,6 +363,7 @@ def main():
     parser.add_argument("--set_seed", type=bool, default=False, help='')
     parser.add_argument("--calculate_mse", type=bool, default=False, help='')
     parser.add_argument('--static_quantized_layers', nargs='*', help='<Layers to quantize', default=[])
+    
 
 
     args = parser.parse_args()   
