@@ -10,8 +10,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.ao.quantization import (
-  get_default_qconfig_mapping,
-  get_default_qat_qconfig_mapping,
   QConfigMapping,
 )
 import torch.quantization.quantize_fx as quantize_fx
@@ -38,10 +36,11 @@ def test_model(args):
         np.random.seed(42)
         print("Setting seed to 42...")
     #build model
-    model = Faceformer(args)
+    model = get_model(args)
     model.load_state_dict(torch.load(os.path.join(args.dataset, '{}.pth'.format(args.model_name)),  map_location=torch.device(args.device)))
     model = model.to(torch.device(args.device))
     model.eval()
+    old_model = copy.deepcopy(model)
 
     template_file = os.path.join(args.dataset, args.template_path)
     with open(template_file, 'rb') as fin:
@@ -68,22 +67,47 @@ def test_model(args):
     audio_feature = np.squeeze(processor(speech_array,sampling_rate=16000).input_values)
     audio_feature = np.reshape(audio_feature,(-1,audio_feature.shape[0]))
     audio_feature = torch.FloatTensor(audio_feature).to(device=args.device)
-    print("Model size before quantization: ")
-    print_size_of_model(model)
 
-    if args.int8_quantization == "dynamic_fx":
-        raise NotImplementedError("dynamic_fx quantization is not supported because model is not traceable.")
-        print("Doing int8 quantization...")
-        model = transform_model_to_int8_fx(model, audio_feature)
-    elif args.int8_quantization == "dynamic_eager":
-        print("Doing dynamic_eager int8 quantization...")
-        model = transform_model_to_int8_eager(model)
-    print(model)
-    print("Model size after quantization: ")
-    print_size_of_model(model)
+
     print("Starting to predict...")
     start_time = time.time()
     #TODO consider using intel ipex...
+    if args.int8_quantization == "static_int8":
+        # normed_conv_model = model.audio_encoder.encoder.pos_conv_embed.conv
+        # weight_g, weight_v = normed_conv_model.weight_g, normed_conv_model.weight_v        
+        model.qconfig = torch.ao.quantization.get_default_qconfig('x86')
+        model.audio_encoder.qconfig = None
+        model.obj_vector.qconfig = None
+        model.audio_feature_map.qconfig = None
+        model.PPE.qconfig = None
+        # model.vertice_map_r.qconfig = torch.ao.quantization.get_default_qconfig('x86')
+        # model.vertice_map.qconfig = torch.ao.quantization.get_default_qconfig('x86')
+        model.transformer_decoder.qconfig = None
+
+        # Not sure what modules needs to be fused, I just wrote here conv and relu
+        #TODO!! use fuzed models
+        # model_fused = torch.ao.quantization.fuse_modules(model, [['conv', 'activation']])
+        model = torch.ao.quantization.prepare(model)
+        model.predict(audio_feature, template, one_hot, args.optimize_last_layer)
+        model = torch.ao.quantization.convert(model)
+
+        # Currently pytorch cant convert weight_norm(conv) to quantisized model - so Iam doing it my own and will open an issue for that
+        # Maybe it is not the right solution
+        # TODO somone asked this in https://discuss.pytorch.org/t/what-is-the-correct-way-to-qat-a-conv-layer-with-weight-norm/160562
+        # Consider upgrade pytorch, I think they changed/fix it in this PR: https://github.com/pytorch/pytorch/pull/103001/files/ec49a529e43509179eee48dbaaac3638913b82a5#diff-b6cd5a3dc103e64e85a2a8cec5b3a9af430319a5c7603dcbb9b7d2642a930f6f
+        # normed_conv_model = model.audio_encoder.encoder.pos_conv_embed.conv
+        # normed_conv_model.register_parameter("weight" + '_g', weight_g)
+        # normed_conv_model.register_parameter("weight" + '_v', weight_v)
+
+
+    elif args.int8_quantization == "dynamic_int8":
+        model = torch.ao.quantization.quantize_dynamic(
+            model,  # the original model
+            {torch.nn.Linear},  # a set of layers to dynamically quantize
+            dtype=torch.qint8)  # the target dtype for quantized weights
+
+    print(model)
+
     with profile(activities=[ProfilerActivity.CPU],
         profile_memory=True,
         record_shapes=True,
@@ -93,17 +117,24 @@ def test_model(args):
         prediction = model.predict(audio_feature, template, one_hot, args.optimize_last_layer)
     print(prof.key_averages(group_by_stack_n=5).table(sort_by="cpu_time_total", row_limit=20))
 
-    print("Time for prediction: {}".format(time.time()-start_time))
+    if args.calculate_mse:
+        print("Calculating MSE...")
+        non_quantized_prediction = old_model.predict(audio_feature, template, one_hot, args.optimize_last_layer)
+
+        mse = F.mse_loss(prediction, non_quantized_prediction)
+        print("MSE IS: ", mse)
     
     prediction = prediction.squeeze() # (seq_len, V*3)
     np.save(os.path.join(args.result_path, test_name), prediction.detach().cpu().numpy())
 
-def transform_model_to_int8_eager(model):
-    model_int8 = torch.ao.quantization.quantize_dynamic(
-        model,  # the original model
-        {torch.nn.Linear},  # a set of layers to dynamically quantize
-        dtype=torch.qint8)  # the target dtype for quantized weights
-    return model_int8
+
+def get_model(args):
+    if args.int8_quantization == "dynamic_int8":
+        return Faceformer(args)
+    elif args.int8_quantization == "static_int8":
+        return Faceformer(args, quantize_statically=True)
+    else:
+        return Faceformer(args)
         
 def print_size_of_model(model):
     torch.save(model.state_dict(), "temp.p")
@@ -263,6 +294,7 @@ def main():
     parser.add_argument("--int8_quantization", type=str, default="", help='')
     parser.add_argument("--optimize_last_layer", type=bool, default=False, help='Dont calculate linear layer for all')
     parser.add_argument("--set_seed", type=bool, default=False, help='')
+    parser.add_argument("--calculate_mse", type=bool, default=False, help='')
 
 
     args = parser.parse_args()   
